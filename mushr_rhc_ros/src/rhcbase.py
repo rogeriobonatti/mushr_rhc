@@ -63,11 +63,11 @@ class RHCBase(object):
         cfname = self.params.get_str("cost_fn_name", default="waypoints")
         if cfname not in cost_functions:
             self.logger.fatal("cost_fn '{}' is not valid".format(cfname))
-
+        
         wrname = self.params.get_str("world_rep_name", default="simple")
         if wrname not in world_reps:
             self.logger.fatal("world_rep '{}' is not valid".format(wrname))
-
+        
         self.logger.debug("Waiting for map metadata")
         while self.map_data is None:
             rospy.sleep(0.1)

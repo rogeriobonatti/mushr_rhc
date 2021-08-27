@@ -142,9 +142,9 @@ class SimpleKNN:
             # There was no paths to this point
             return False
 
-        self.reachable_pts = pts_w_goal[length_to_goal.keys()]
-        self.reachable_nodes = length_to_goal.keys()
-        self.reachable_dst = length_to_goal.values()
+        self.reachable_pts = pts_w_goal[list(length_to_goal.keys())]
+        self.reachable_nodes = list(length_to_goal.keys())
+        self.reachable_dst = list(length_to_goal.values())
 
         self._viz_halton()
 
