@@ -142,7 +142,7 @@ class SimpleKNN:
             # There was no paths to this point
             return False
 
-        self.reachable_pts = pts_w_goal[length_to_goal.keys()]
+        self.reachable_pts = pts_w_goal[list(length_to_goal.keys())]
         self.reachable_nodes = length_to_goal.keys()
         self.reachable_dst = length_to_goal.values()
 
@@ -212,7 +212,7 @@ class SimpleKNN:
         hp[:, 1] = self.points[:, 0]
         hp_map = hp.copy()
         utils.map.map2worldnp(self.map, hp)
-        
+
         return hp_map, hp
 
     def _eval_edge(self, src, dst):

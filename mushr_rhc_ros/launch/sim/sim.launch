@@ -8,7 +8,7 @@
     </group>
 
     <group ns="$(arg car_name)">
-        <node pkg="mushr_rhc_ros" type="rhcnode.py" name="rhcontroller" output="screen">
+        <node pkg="mushr_rhc_ros" type="rhcnode_record_desktop.py" name="rhcontroller" output="screen">
             <env name="RHC_USE_CUDA" value="0" />
 
         <param name="inferred_pose_t" value="car_pose" />
