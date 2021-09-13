@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 # Copyright (c) 2019, The Personal Robotics Lab, The MuSHR Team, The Contributors of MuSHR
 # License: BSD 3-Clause. See LICENSE.md file in root directory.
@@ -13,7 +13,7 @@ import numpy as np
 import rospy
 from ackermann_msgs.msg import AckermannDriveStamped
 from geometry_msgs.msg import Point, PoseStamped, PoseWithCovarianceStamped
-from std_msgs.msg import ColorRGBA, Empty
+from std_msgs.msg import ColorRGBA, Empty, String
 from std_srvs.srv import Empty as SrvEmpty
 from visualization_msgs.msg import Marker
 
@@ -77,10 +77,16 @@ class RHCNode(rhcbase.RHCBase):
         rate_hz = 50
         rate = rospy.Rate(rate_hz)
         self.logger.info("Initialized")
-
+ 
         while not rospy.is_shutdown() and self.run:
             ip = self.inferred_pose()
             next_traj, rollout = self.run_loop(ip)
+
+            # check if we should send set a new goal location
+            if self.check_new_goal(next_traj, rate_hz):
+                rospy.loginfo("Going to set next goal")
+                self.set_new_random_goal()
+
             with self.traj_pub_lock:
                 if rollout is not None:
                     self.cur_rollout = rollout.clone()
@@ -90,23 +96,27 @@ class RHCNode(rhcbase.RHCBase):
                 self.publish_traj(next_traj, rollout)
                 # For experiments. If the car is at the goal, notify the
                 # experiment tool
-                if self.rhctrl.at_goal(self.inferred_pose()):
-                    self.expr_at_goal.publish(Empty())
-                    self.goal_event.clear()
-
-            # check if we should send set a new goal location
-            if self.check_new_goal(next_traj, rate_hz):
-                rospy.loginfo("Going to set next goal")
-                self.set_new_random_goal()
+                # if self.rhctrl.at_goal(self.inferred_pose()):
+                #     self.expr_at_goal.publish(Empty())
+                #     self.goal_event.clear()
 
             rate.sleep()
 
         self.end_profile()
 
     def check_new_goal(self, next_traj, rate_hz):
+        # condition if there is no goal currently set
+        if self.goal_event.is_set() is False:
+            msg = String()
+            msg.data = "first time"
+            self.expr_at_goal.publish(msg)
+            return True
         # condition if the goal is reached
         if self.rhctrl.at_goal(self.inferred_pose()):
             rospy.loginfo("Reached the goal")
+            msg = String()
+            msg.data = "reached goal"
+            self.expr_at_goal.publish(msg)
             self.goal_event.clear()
             return True
         # condition if the car gets stuck
@@ -115,14 +125,20 @@ class RHCNode(rhcbase.RHCBase):
             if v < 0.05 and rospy.Time.now().to_sec() - self.time_started_goal.to_sec() > 1.0:
                 # this means that the car was supposed to follow a traj, but velocity is too low bc it's stuck
                 # first we reset the car pose, then we return True to select a new goal
-                rospy.loginfo("Got stuck, resetting pose of the car to default value")
                 self.goal_event.clear()
                 self.send_initial_pose()
+                rospy.loginfo("Got stuck, resetting pose of the car to default value")
+                msg = String()
+                msg.data = "got stuck"
+                self.expr_at_goal.publish(msg)
                 return True
         # condition if the car gets inside an infinite loop and never reaches goal
         if self.time_started_goal is not None:
             if rospy.Time.now().to_sec() - self.time_started_goal.to_sec() > 30.0:
                 rospy.loginfo("Timeout, couldn't reach goal after a while")
+                msg = String()
+                msg.data = "timeout"
+                self.expr_at_goal.publish(msg)
                 self.goal_event.clear()
                 return True
         return False
@@ -142,7 +158,7 @@ class RHCNode(rhcbase.RHCBase):
         self.pose_reset.publish(msg)
     
     def run_loop(self, ip):
-        self.goal_event.wait()
+        # self.goal_event.wait()
         if rospy.is_shutdown() or ip is None:
             return None, None
         with self.reset_lock:
@@ -205,7 +221,7 @@ class RHCNode(rhcbase.RHCBase):
         self.traj_chosen_pub = rospy.Publisher(traj_chosen_t, Marker, queue_size=10)
 
         # For the experiment framework, need indicators to listen on
-        self.expr_at_goal = rospy.Publisher("experiments/finished", Empty, queue_size=1)
+        self.expr_at_goal = rospy.Publisher("experiments/finished", String, queue_size=1)
         
         # to publish the new goal, for visualization
         self.goal_pub = rospy.Publisher("~goal", Marker, queue_size=10)

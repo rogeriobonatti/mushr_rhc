@@ -126,7 +126,8 @@ class Dispersion:
         def hausdorff(a, b):
             return max(directed_hausdorff(a, b)[0], directed_hausdorff(b, a)[0])
 
-        for _ in range(self.K - 1):
+        for n in range(self.K - 1):
+            print("Loading: " + str(int(n/(self.K-1)*100)))
             max_i, max_dist = 0, 0
             for rollout in range(len(ms_ctrls)):
                 if rollout in visited:
