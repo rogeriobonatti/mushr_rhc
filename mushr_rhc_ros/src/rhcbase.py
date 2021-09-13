@@ -89,6 +89,7 @@ class RHCBase(object):
 
     def cb_map_metadata(self, msg):
         default_map_name = "default"
+        # default_map_name = "bravern_floor"
         map_file = self.params.get_str(
             "map_file", default=default_map_name, global_=True
         )

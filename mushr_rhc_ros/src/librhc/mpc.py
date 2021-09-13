@@ -33,7 +33,7 @@ class MPC:
         # Rollouts buffer, the main engine of our computation
         self.rollouts = self.dtype(self.K, self.T, self.NPOS)
 
-        xy_thresh = self.params.get_float("xy_threshold", default=0.5)
+        xy_thresh = self.params.get_float("xy_threshold", default=1.5)
         self.goal_threshold = self.dtype([xy_thresh, xy_thresh])
         self.desired_speed = self.params.get_float("trajgen/desired_speed", default=1.0)
         self.dist_horizon = utils.get_distance_horizon(self.params)

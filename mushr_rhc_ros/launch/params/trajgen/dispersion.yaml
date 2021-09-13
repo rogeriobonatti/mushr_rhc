@@ -16,4 +16,4 @@ cost_fn:
     smoothing_discount_rate: 0.0
     bounds_cost: 1000.0
 world_rep:
-    epsilon: 0.6
+    epsilon: 0.65

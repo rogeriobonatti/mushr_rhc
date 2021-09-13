@@ -165,6 +165,11 @@ class SimpleKNN:
         hp[:, 1] = self.reachable_pts[:, 0]
         utils.map.map2worldnp(self.map, hp)
 
+        # hp = np.zeros((len(self.points), 3))
+        # hp[:, 0] = self.points[:, 1]
+        # hp[:, 1] = self.points[:, 0]
+        # utils.map.map2worldnp(self.map, hp)
+
         m = Marker()
         m.header.frame_id = "map"
         m.header.stamp = rospy.Time.now()
@@ -194,6 +199,21 @@ class SimpleKNN:
 
         pub = rospy.Publisher("~markers", Marker, queue_size=100)
         pub.publish(m)
+
+    def _get_halton_pts(self):
+        # hp = np.zeros((len(self.reachable_pts), 3))
+        # hp[:, 0] = self.reachable_pts[:, 1]
+        # hp[:, 1] = self.reachable_pts[:, 0]
+        # hp_map = hp.copy()
+        # utils.map.map2worldnp(self.map, hp)
+
+        hp = np.zeros((len(self.points), 3))
+        hp[:, 0] = self.points[:, 1]
+        hp[:, 1] = self.points[:, 0]
+        hp_map = hp.copy()
+        utils.map.map2worldnp(self.map, hp)
+        
+        return hp_map, hp
 
     def _eval_edge(self, src, dst):
         # moves along line between src and dst and samples points

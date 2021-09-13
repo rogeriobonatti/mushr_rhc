@@ -102,6 +102,7 @@ class RHCDebug(rhcbase.RHCBase):
                 m.scale.x = 1
                 m.scale.y = 0.1
                 m.scale.z = 0.1
+                m.color.a = 1.0
                 self.goal_pub.publish(m)
 
     def cb_initialpose(self, msg):
