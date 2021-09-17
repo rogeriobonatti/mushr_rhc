@@ -94,7 +94,7 @@ class SimpleKNN:
                 if self.perm_region[y, x] == 0:
                     valid.append((y, x))
             n += inc
-            print("valid points len: " + str(len(valid)))
+            # print("valid points len: " + str(len(valid)))
         return np.array(valid)
 
     def set_goal(self, goal, n_neighbors=7, k=3):

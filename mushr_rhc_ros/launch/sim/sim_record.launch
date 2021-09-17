@@ -3,7 +3,7 @@
     <arg name="car_name" default="car" />
     
     <arg name="out_path" default="/home/rb/recordings"/>
-    <arg name="trial_name" default="0"/>
+    <arg name="trial_name" default="2"/>
 
     <rosparam command="dump" file="$(arg out_path)/$(arg trial_name)-params.yaml" />
 
