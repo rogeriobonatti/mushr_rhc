@@ -134,7 +134,7 @@ class RHCNode(rhcbase.RHCBase):
                 return True
         # condition if the car gets inside an infinite loop and never reaches goal
         if self.time_started_goal is not None:
-            if rospy.Time.now().to_sec() - self.time_started_goal.to_sec() > 30.0:
+            if rospy.Time.now().to_sec() - self.time_started_goal.to_sec() > 90.0:
                 rospy.loginfo("Timeout, couldn't reach goal after a while")
                 msg = String()
                 msg.data = "timeout"
@@ -391,11 +391,11 @@ class RHCNode(rhcbase.RHCBase):
                     self.cur_rollout[:, :2] - self.cur_rollout_ip[:2]
                 ) + self.inferred_pose()[:2]
 
-            m.points = map(lambda xy: Point(x=xy[0], y=xy[1]), pts)
+            m.points = list(map(lambda xy: Point(x=xy[0], y=xy[1]), pts))
 
             r, g, b = 0x36, 0xCD, 0xC4
             m.colors = [ColorRGBA(r=r / 255.0, g=g / 255.0, b=b / 255.0, a=0.7)] * len(
-                m.points
+                list(m.points)
             )
             m.scale.x = 0.05
             self.traj_chosen_pub.publish(m)
