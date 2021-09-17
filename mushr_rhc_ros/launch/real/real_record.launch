@@ -1,0 +1,26 @@
+
+<launch>
+    <arg name="car_name" default="car" />
+    
+    <arg name="out_path" default="/home/rb/recordings"/>
+    <arg name="trial_name" default="2"/>
+
+    <rosparam command="dump" file="$(arg out_path)/$(arg trial_name)-params.yaml" />
+
+    <group ns="$(arg car_name)">
+        <node pkg="rosbag" type="record" name="debug_recorder"
+            args="record -O $(arg out_path)/$(arg trial_name).bag
+            car_pose
+            experiments/finished
+            mux/ackermann_cmd_mux/active
+            mux/ackermann_cmd_mux/input/navigation
+            rhcontroller/goal
+            rhcontroller/markers
+            rhcontroller/markers_zero_cost
+            rhcontroller/traj_chosen
+            scan
+            /tf
+            /tf_static" />
+    </group>
+
+</launch>
