@@ -2,14 +2,14 @@
 <launch>
     <arg name="car_name" default="car" />
     
-    <arg name="out_path" default="/project/recordings"/>
+    <arg name="record_path" default="/project/recordings"/>
     <arg name="trial_name" default="3"/>
 
-    <rosparam command="dump" file="$(arg out_path)/$(arg trial_name)-params.yaml" />
+    <rosparam command="dump" file="$(arg record_path)/$(arg trial_name)-params.yaml" />
 
     <group ns="$(arg car_name)">
         <node pkg="rosbag" type="record" name="debug_recorder"
-            args="record -O $(arg out_path)/$(arg trial_name).bag
+            args="record -O $(arg record_path)/$(arg trial_name).bag
             car_pose
             experiments/finished
             mux/ackermann_cmd_mux/active
