@@ -41,6 +41,8 @@ class RHCNode(rhcbase.RHCBase):
         self.hp_map = None
         self.hp_world = None
         self.time_started_goal = None
+        self.num_trials = 0
+        # self.max_trials = 3
 
         self.cur_rollout = self.cur_rollout_ip = None
         self.traj_pub_lock = threading.Lock()
@@ -93,7 +95,12 @@ class RHCNode(rhcbase.RHCBase):
 
             # check if we should send set a new goal location
             if self.check_new_goal(next_traj, rate_hz):
-                rospy.loginfo("Going to set next goal")
+                rospy.loginfo("Going to set next goal: number {}".format(self.num_trials))
+                self.num_trials += 1
+                # if self.num_trials > self.max_trials:
+                #     rospy.loginfo("Shutting down...")
+                    # rospy.signal_shutdown("Reach max trials")
+                    # continue
                 self.set_new_random_goal()
 
             with self.traj_pub_lock:

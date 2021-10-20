@@ -21,6 +21,9 @@
             <rosparam file="$(find mushr_rhc_ros)/launch/sim/params.yaml" />
         </node>
 
+        <node pkg="mushr_rhc_ros" type="control_node.py" name="control_node" output="screen" required="true" >
+        </node>
+
         <!-- <node pkg="mushr_rhc_ros" type="rhcdebug.py" name="rhcdebug" output="screen">
         <env name="RHC_USE_CUDA" value="0" />
 
