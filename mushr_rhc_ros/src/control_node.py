@@ -8,7 +8,7 @@ class CtrNode:
         rospy.init_node("control_node")
 
         self.num_trials = 0
-        self.max_trials = 3
+        self.max_trials = 250
         self.rate = rospy.Rate(10)
         
         rospy.Subscriber("experiments/finished", String, self.finished_cb)
