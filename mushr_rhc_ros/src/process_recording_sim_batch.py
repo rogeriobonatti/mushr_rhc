@@ -59,7 +59,7 @@ def extract_bag_variables(bag_name):
             poses[idx, 0] = msg.header.stamp.to_sec()
             poses[idx, 1] = msg.pose.position.x
             poses[idx, 2] = msg.pose.position.y
-            poses[idx, 3] = utils.rosquaternion_to_angle(msg.orientation)
+            poses[idx, 3] = utils.rosquaternion_to_angle(msg.pose.orientation)
         elif topic == 'rhcontroller/goal':
             goals[idx, 0] = msg.header.stamp.to_sec()
             goals[idx, 1] = msg.pose.position.x
@@ -86,25 +86,48 @@ def process_folder(folder, processed_dataset_path):
             if (int(event)==0 or int(event)==3) and (t_end - t_start)>5.0:
                 # if it's here, in this episode it reached goal or timed out
                 # both are ok, so we process the episode
-                # 1) get the time intervals when we have commands
-                e_angles = angles[(angles[:,0]>=t_start) & (angles[:,0]<t_end)]
-                # catch condition where it terminates too early because of some error
-                if e_angles.shape[0]>100:
-                    t_angles = [e_angles[0,0], e_angles[-1,0]]
-                    # 2) get lidar scans within this interval
-                    e_scans = scans[(scans[:,0]>=t_angles[0]) & (scans[:,0]<t_angles[1])]
-                    # 3) for each scan, find the appropriate angle label (don't iterate over last scan of episode)
-                    # time 1 | action 1| lidar 720 | pose 3 | goal 2
-                    episode_data = np.zeros((e_scans.shape[0]-1, 722))
-                    for idx in range(e_scans.shape[0]-1):
-                        t_scan = [e_scans[idx,0], e_scans[idx+1,0]]
-                        angle = np.mean(e_angles[(e_angles[:,0]>=t_scan[0]) & (e_angles[:,0]<t_scan[1])][:,1])
-                        episode_data[idx, 0] = e_scans[idx, 0]
-                        episode_data[idx, 1] = angle
-                        episode_data[idx, 2:] = e_scans[idx, 1:]
-                    # 4) save the data as a separate episode in a np variable
-                    filename = os.path.join(processed_dataset_path, 'ep'+str(ep_num))
-                    np.save(filename, episode_data)
+                # 0) get the goal location
+                goal = goals[(goals[:,0]>=t_start) & (goals[:,0]<t_end)]
+                if goal.shape[0] == 0:
+                    pass
+                else:
+                    # 1) get the time intervals when we have commands
+                    e_angles = angles[(angles[:,0]>=t_start) & (angles[:,0]<t_end)]
+                    e_poses = poses[(poses[:,0]>=t_start) & (poses[:,0]<t_end)]
+                    # catch condition where it terminates too early because of some error
+                    if e_angles.shape[0]>100:
+                        t_angles = [e_angles[0,0], e_angles[-1,0]]
+                        # 2) get lidar scans within this interval
+                        e_scans = scans[(scans[:,0]>=t_angles[0]) & (scans[:,0]<t_angles[1])]
+                        # 3) for each scan, find the appropriate angle label (don't iterate over last scan of episode)
+                        # time 1 | action 1| lidar 720 | pose 3 | goal 2
+                        # episode_data = np.zeros((e_scans.shape[0]-1, 727))
+                        episode_ts = np.zeros((e_scans.shape[0]-1, 1))
+                        episode_angles = np.zeros((e_scans.shape[0]-1, 1))
+                        episode_lidars = np.zeros((e_scans.shape[0]-1, 720))
+                        episode_poses = np.zeros((e_scans.shape[0]-1, 3))
+                        for idx in range(e_scans.shape[0]-1):
+                            t_scan = [e_scans[idx,0], e_scans[idx+1,0]]
+                            angle = np.mean(e_angles[(e_angles[:,0]>=t_scan[0]) & (e_angles[:,0]<t_scan[1])][:,1])
+                            poses_valid = e_poses[(e_poses[:,0]>=t_scan[0]) & (e_poses[:,0]<t_scan[1])]
+                            pose_x = np.mean(poses_valid[:,1])
+                            pose_y = np.mean(poses_valid[:,2])
+                            mean_s = np.mean(np.sin(poses_valid[:,3]))
+                            mean_c = np.mean(np.cos(poses_valid[:,3]))
+                            mean_angle = np.arctan2(mean_s, mean_c)
+                            # add all the components of the data I'm saving
+                            episode_ts[idx,0] = e_scans[idx, 0]
+                            episode_angles[idx,0] = angle
+                            episode_lidars[idx,:] = e_scans[idx, 1:]
+                            episode_poses[idx, :] = np.array([pose_x, pose_y, mean_angle])
+                            # episode_data[idx, 0] = e_scans[idx, 0]
+                            # episode_data[idx, 1] = angle
+                            # episode_data[idx, 2:722] = e_scans[idx, 1:]
+                            # episode_data[idx, 723:726] = [pose_x, pose_y, mean_angle]
+                        # 4) save the data as a separate episode in a np variable
+                        filename = os.path.join(processed_dataset_path, 'ep'+str(ep_num))
+                    np.savez(filename, ts=episode_ts, angles=episode_angles, lidars=episode_lidars, poses=episode_poses, goal=goal[0,1:3])
+                    # np.save(filename, episode_data)
                     ep_num += 1
             else:
                 # don't save this data because there was some issue with this episode
@@ -115,7 +138,7 @@ def process_folder(folder, processed_dataset_path):
 
 # define script parameters
 base_folder = '/home/azureuser/hackathon_data/hackathon_data'
-output_folder_name = 'processed_pose'
+output_folder_name = 'processed_withpose'
 folders_list = sorted(glob.glob(os.path.join(base_folder, '*')))
 total_n_folders = len(folders_list)
 print("Total number of folders to be processed = {}".format(total_n_folders))
