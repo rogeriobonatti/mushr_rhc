@@ -89,6 +89,7 @@ def process_folder(folder, processed_dataset_path):
                 # 0) get the goal location
                 goal = goals[(goals[:,0]>=t_start) & (goals[:,0]<t_end)]
                 if goal.shape[0] == 0:
+                    # there's some issue with the goal of this episode, so discard
                     pass
                 else:
                     # 1) get the time intervals when we have commands
@@ -126,9 +127,9 @@ def process_folder(folder, processed_dataset_path):
                             # episode_data[idx, 723:726] = [pose_x, pose_y, mean_angle]
                         # 4) save the data as a separate episode in a np variable
                         filename = os.path.join(processed_dataset_path, 'ep'+str(ep_num))
-                    np.savez(filename, ts=episode_ts, angles=episode_angles, lidars=episode_lidars, poses=episode_poses, goal=goal[0,1:3])
-                    # np.save(filename, episode_data)
-                    ep_num += 1
+                        np.savez(filename, ts=episode_ts, angles=episode_angles, lidars=episode_lidars, poses=episode_poses, goal=goal[0,1:3])
+                        # np.save(filename, episode_data)
+                        ep_num += 1
             else:
                 # don't save this data because there was some issue with this episode
                 pass
@@ -138,7 +139,7 @@ def process_folder(folder, processed_dataset_path):
 
 # define script parameters
 base_folder = '/home/azureuser/hackathon_data/hackathon_data'
-output_folder_name = 'processed_withpose'
+output_folder_name = 'processed_withpose2'
 folders_list = sorted(glob.glob(os.path.join(base_folder, '*')))
 total_n_folders = len(folders_list)
 print("Total number of folders to be processed = {}".format(total_n_folders))
