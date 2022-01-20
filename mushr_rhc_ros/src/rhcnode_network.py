@@ -4,13 +4,12 @@
 # License: BSD 3-Clause. See LICENSE.md file in root directory.
 
 import sys
-print(sys.version)
-import cProfile
 import os
 import signal
 import threading
 import random
 import numpy as np
+from queue import Queue
 
 import rospy
 from ackermann_msgs.msg import AckermannDriveStamped
@@ -18,14 +17,19 @@ from geometry_msgs.msg import Point, PoseStamped, PoseWithCovarianceStamped
 from std_msgs.msg import ColorRGBA, Empty, String
 from std_srvs.srv import Empty as SrvEmpty
 from visualization_msgs.msg import Marker
+from sensor_msgs.msg import LaserScan
 
 import logger
 import parameters
 import rhcbase
 import rhctensor
-import utils
+import utilss
 import librhc.utils as utils_other
 
+import torch
+from mingpt.model_resnetdirect import ResnetDirect, ResnetDirectWithActions
+from mingpt.model_musher import GPT, GPTConfig
+import preprocessing_utils as pre
 
 class RHCNode(rhcbase.RHCBase):
     def __init__(self, dtype, params, logger, name):
@@ -54,29 +58,49 @@ class RHCNode(rhcbase.RHCBase):
         self.events = [self.goal_event, self.map_metadata_event, self.ready_event]
         self.run = True
 
-        self.ready_for_network = False
         self.default_speed = 2.5
         self.default_angle = 0.0
+        self.nx = None
+        self.ny = None
+        
+        # network loading
+        print("Starting to load model")
+        os.environ["CUDA_VISIBLE_DEVICES"]=str(0)
+        device = torch.device('cuda')
+        
+        self.clip_len = 8
+        self.restype = 'resnet50'
+        model = ResnetDirectWithActions(device, clip_len=self.clip_len, restype=self.restype)
+        saved_model_path = '/home/rb/hackathon_data/aml_outputs/log_output/test_m18/ResnetDirectWithActionss_lr_test_m18_cli_8_mod_ResnetDirectWithActions_2022-01-14_1642196742.9677417_2022-01-14_1642196742.9677548/model/epoch17.pth.tar'
+        saved_model_path = '/home/rb/hackathon_data/aml_outputs/log_output/test_m19/ResnetDirectWithActionss_lr_test_m19_cli_8_mod_ResnetDirectWithActions_2022-01-19_1642619534.094115_2022-01-19_1642619534.0941286/model/epoch19.pth.tar'
 
-        self.do_profile = self.params.get_bool("profile", default=False)
+        # self.clip_len = 16
+        # saved_model_path = '/home/rb/downloaded_models/epoch30.pth.tar'
+        # mconf = GPTConfig(vocab_size=100, block_size=self.clip_len*2, max_timestep=7,
+        #               n_layer=6, n_head=8, n_embd=128, model_type='GPT', use_pred_state=True,
+        #               state_tokenizer='conv2D', pretrained_encoder_path=saved_model_path, loss='MSE', train_mode='e2e')
+        # model = GPT(mconf, device)
+        
+        
+        checkpoint = torch.load(saved_model_path)
+        model.load_state_dict(checkpoint['state_dict'])
+        model.eval()
+        model.to(device)
+        self.model = model
+        self.device = device
+        print("Finished loading model")
 
-    def start_profile(self):
-        if self.do_profile:
-            self.logger.warn("Running with profiling")
-            self.pr = cProfile.Profile()
-            self.pr.enable()
-
-    def end_profile(self):
-        if self.do_profile:
-            self.pr.disable()
-            self.pr.dump_stats(os.path.expanduser("~/mushr_rhc_stats.prof"))
+        self.q_scans = Queue(maxsize = self.clip_len+1)
+        self.q_actions = Queue(maxsize = self.clip_len)
+        for i in range(self.clip_len):
+            self.q_actions.put(self.default_angle)
+        self.last_action = self.default_angle
+        self.compute_network = False
 
     def start(self):
         self.logger.info("Starting RHController")
-        self.start_profile()
         self.setup_pub_sub()
         self.rhctrl = self.load_controller()
-        self.T = self.params.get_int("T")
         self.find_allowable_pts() # gets the allowed halton points from the map
 
         self.ready_event.set()
@@ -102,19 +126,59 @@ class RHCNode(rhcbase.RHCBase):
                 rospy.loginfo("Resetting the car's position")
 
             # publish next action
-            if self.ready_for_network is True:
-                angle = self.apply_network()
-                self.publish_traj(self.default_speed, angle)
-            else:
-                self.publish_traj(self.default_speed, self.default_angle)
-                print(sys.version)
+            if self.compute_network:
+                # don't have to run the network at all times, only when scans change and scans are full
+                self.last_action = self.apply_network()
+                self.q_actions.get()  # remove the oldest action from the queue
+                self.q_actions.put(self.last_action)
+                rospy.loginfo("Applied network: "+str(self.last_action))
+                self.compute_network = False
+            
+            self.publish_traj(self.default_speed, self.last_action)
 
             rate.sleep()
 
-        self.end_profile()
-    
     def apply_network(self):
-        pass
+        # organize the scan input
+        x_imgs = torch.zeros(1,self.clip_len,self.nx,self.ny)
+        y_imgs = torch.zeros(1,1,self.nx,self.ny)
+        x_act = torch.zeros(1,self.clip_len)
+        y_act = None
+        
+        
+        while True:
+            try:
+                queue_list = self.q_scans.queue
+                if len(queue_list)==self.clip_len+1:
+                    break
+            except ValueError:
+                print("EXCEPTION: diff number of images, or read at the wrong time")
+        
+        idx = 0
+        for img in queue_list:
+            if idx==self.q_scans.qsize()-1:
+                y_imgs[0,0,:] = torch.tensor(img)
+            else:
+                x_imgs[0,idx,:] = torch.tensor(img)
+            idx+=1
+        idx = 0
+        for act in self.q_actions.queue:
+            x_act[0,idx] = torch.tensor(act)
+            idx+=1
+
+        x_imgs = x_imgs.to(self.device)
+        y_imgs = y_imgs.to(self.device)
+        x_act = x_act.to(self.device)
+        # y_act = y_act.to(self.device)
+
+        # organize the action input
+        with torch.set_grad_enabled(False):
+            action_pred, loss = self.model(x_imgs, x_act, y_imgs, y_act)
+            action_pred = action_pred.cpu().flatten().item()
+        
+        # de-normalize
+        action_pred = pre.denorm_angle(action_pred)
+        return action_pred
 
     def check_reset(self, rate_hz):
         # condition if the car gets stuck
@@ -138,10 +202,14 @@ class RHCNode(rhcbase.RHCBase):
         msg = PoseWithCovarianceStamped()
         msg.header.stamp = rospy.Time.now()
         msg.header.frame_id = "map"
-        msg.pose.pose.position.x = hp_world_valid[new_pos_idx][0]
-        msg.pose.pose.position.y = hp_world_valid[new_pos_idx][1]
+        # msg.pose.pose.position.x = hp_world_valid[new_pos_idx][0]
+        # msg.pose.pose.position.y = hp_world_valid[new_pos_idx][1]
+        # msg.pose.pose.position.z = 0.0
+        # quat = utilss.angle_to_rosquaternion(hp_world_valid[new_pos_idx][1])
+        msg.pose.pose.position.x = 4.12211 + (np.random.rand()-0.5)*2.0*0.5
+        msg.pose.pose.position.y = -7.49623 + (np.random.rand()-0.5)*2.0*0.5
         msg.pose.pose.position.z = 0.0
-        quat = utils.angle_to_rosquaternion(hp_world_valid[new_pos_idx][1])
+        quat = utilss.angle_to_rosquaternion(np.radians(62.373 + (np.random.rand()-0.5)*2.0*360))
         msg.pose.pose.orientation = quat
         self.pose_reset.publish(msg)
 
@@ -150,12 +218,39 @@ class RHCNode(rhcbase.RHCBase):
         self.run = False
         for ev in self.events:
             ev.set()
+    
+    def process_scan(self, msg):
+        scan = np.zeros((721), dtype=np.float)
+        scan[0] = msg.header.stamp.to_sec()
+        scan[1:] = msg.ranges
+        original_points, sensor_origins, time_stamps, pc_range, voxel_size, lo_occupied, lo_free = pre.load_params(scan)
+        vis_mat, nx, ny = pre.compute_bev_image(original_points, sensor_origins, time_stamps, pc_range, voxel_size)
+        if self.nx is None:
+            self.nx = nx
+            self.ny = ny
+        return vis_mat
+
+    def cb_scan(self, msg):
+        # remove oldest element if the queue is already full
+        if self.q_scans.full():
+            self.compute_network = True  # start running the network in the main loop from now on
+            self.q_scans.get()  # remove the oldest element, will be replaced next
+        # add new processed scan
+        self.q_scans.put(self.process_scan(msg)) # store matrices from 0-1 with the scans
+        
 
     def setup_pub_sub(self):
         rospy.Service("~reset/soft", SrvEmpty, self.srv_reset_soft)
         rospy.Service("~reset/hard", SrvEmpty, self.srv_reset_hard)
 
         car_name = self.params.get_str("car_name", default="car")
+
+        rospy.Subscriber(
+            "/" + car_name + "/" + 'scan',
+            LaserScan,
+            self.cb_scan,
+            queue_size=10,
+        )
 
         rospy.Subscriber(
             "/" + car_name + "/" + rospy.get_param("~inferred_pose_t"),
@@ -223,7 +318,7 @@ class RHCNode(rhcbase.RHCBase):
     def cb_pose(self, msg):
         if self.inferred_pose is not None:
             self.set_inferred_pose_prev(self.inferred_pose())
-        self.set_inferred_pose(self.dtype(utils.rospose_to_posetup(msg.pose)))
+        self.set_inferred_pose(self.dtype(utilss.rospose_to_posetup(msg.pose)))
 
         if self.cur_rollout is not None and self.cur_rollout_ip is not None:
             m = Marker()

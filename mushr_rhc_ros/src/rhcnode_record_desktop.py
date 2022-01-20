@@ -21,7 +21,7 @@ import logger
 import parameters
 import rhcbase
 import rhctensor
-import utils
+import utilss
 import librhc.utils as utils_other
 
 
@@ -153,7 +153,7 @@ class RHCNode(rhcbase.RHCBase):
         msg.pose.pose.position.x = hp_world_valid[new_pos_idx][0]
         msg.pose.pose.position.y = hp_world_valid[new_pos_idx][1]
         msg.pose.pose.position.z = 0.0
-        quat = utils.angle_to_rosquaternion(hp_world_valid[new_pos_idx][1])
+        quat = utilss.angle_to_rosquaternion(hp_world_valid[new_pos_idx][1])
         msg.pose.pose.orientation = quat
         self.pose_reset.publish(msg)
     
@@ -252,7 +252,7 @@ class RHCNode(rhcbase.RHCBase):
         return []
 
     def cb_goal(self, msg):
-        goal = self.dtype(utils.rospose_to_posetup(msg.pose))
+        goal = self.dtype(utilss.rospose_to_posetup(msg.pose))
         self.ready_event.wait()
         if not self.rhctrl.set_goal(goal):
             self.logger.err("That goal is unreachable, please choose another")
@@ -364,7 +364,7 @@ class RHCNode(rhcbase.RHCBase):
         m.pose.position.x = goal[0]
         m.pose.position.y = goal[1]
         m.pose.position.z = 0
-        quat = utils.angle_to_rosquaternion(goal[2])
+        quat = utilss.angle_to_rosquaternion(goal[2])
         m.pose.orientation.x = quat.x
         m.pose.orientation.y = quat.y
         m.pose.orientation.z = quat.z
@@ -379,7 +379,7 @@ class RHCNode(rhcbase.RHCBase):
     def cb_pose(self, msg):
         if self.inferred_pose is not None:
             self.set_inferred_pose_prev(self.inferred_pose())
-        self.set_inferred_pose(self.dtype(utils.rospose_to_posetup(msg.pose)))
+        self.set_inferred_pose(self.dtype(utilss.rospose_to_posetup(msg.pose)))
 
         if self.cur_rollout is not None and self.cur_rollout_ip is not None:
             m = Marker()

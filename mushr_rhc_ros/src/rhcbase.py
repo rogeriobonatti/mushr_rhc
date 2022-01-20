@@ -14,7 +14,7 @@ import librhc.trajgen as trajgen
 import librhc.types as types
 import librhc.value as value
 import librhc.worldrep as worldrep
-import utils
+import utilss
 
 motion_models = {"kinematic": model.Kinematics}
 
@@ -101,7 +101,7 @@ class RHCBase(object):
                 + "To fix, set '/map_file' parameter with map_file location"
             )
 
-        x, y, angle = utils.rospose_to_posetup(msg.origin)
+        x, y, angle = utilss.rospose_to_posetup(msg.origin)
         self.map_data = types.MapData(
             name=name,
             resolution=msg.resolution,
