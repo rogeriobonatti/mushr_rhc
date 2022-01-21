@@ -3,7 +3,7 @@
     <arg name="car_name" default="car" />
     
     <arg name="out_path" default="/home/robot/data"/>
-    <arg name="trial_name" default="0"/>
+    <arg name="trial_name" default="bravern1"/>
 
     <rosparam command="dump" file="$(arg out_path)/$(arg trial_name)-params.yaml" />
 
@@ -12,9 +12,11 @@
             args="record -O $(arg out_path)/$(arg trial_name).bag
             camera_d465i/color/image_raw/compressed
             car_pose
+            particle_filter/inferred_pose
             experiments/finished
             mux/ackermann_cmd_mux/active
             mux/ackermann_cmd_mux/input/navigation
+            mux/ackermann_cmd_mux/output
             rhcontroller/goal
             rhcontroller/markers
             rhcontroller/markers_zero_cost
