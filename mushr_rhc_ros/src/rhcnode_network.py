@@ -10,6 +10,7 @@ import threading
 import random
 import numpy as np
 from queue import Queue
+import time
 
 import rospy
 from ackermann_msgs.msg import AckermannDriveStamped
@@ -36,6 +37,8 @@ class RHCNode(rhcbase.RHCBase):
         rospy.init_node(name, anonymous=True, disable_signals=True)
 
         super(RHCNode, self).__init__(dtype, params, logger)
+
+        self.scan_lock = threading.Lock()
 
         self.reset_lock = threading.Lock()
         self.inferred_pose_lock = threading.Lock()
@@ -71,9 +74,10 @@ class RHCNode(rhcbase.RHCBase):
         self.clip_len = 8
         self.restype = 'resnet50'
         model = ResnetDirectWithActions(device, clip_len=self.clip_len, restype=self.restype)
-        saved_model_path = '/home/rb/hackathon_data/aml_outputs/log_output/test_m18/ResnetDirectWithActionss_lr_test_m18_cli_8_mod_ResnetDirectWithActions_2022-01-14_1642196742.9677417_2022-01-14_1642196742.9677548/model/epoch17.pth.tar'
-        saved_model_path = '/home/rb/hackathon_data/aml_outputs/log_output/test_m19/ResnetDirectWithActionss_lr_test_m19_cli_8_mod_ResnetDirectWithActions_2022-01-19_1642619534.094115_2022-01-19_1642619534.0941286/model/epoch19.pth.tar'
-
+        # saved_model_path = '/home/rb/hackathon_data/aml_outputs/log_output/test_m18/ResnetDirectWithActionss_lr_test_m18_cli_8_mod_ResnetDirectWithActions_2022-01-14_1642196742.9677417_2022-01-14_1642196742.9677548/model/epoch17.pth.tar'
+        # saved_model_path = '/home/rb/hackathon_data/aml_outputs/log_output/test_m19/ResnetDirectWithActionss_lr_test_m19_cli_8_mod_ResnetDirectWithActions_2022-01-19_1642619534.094115_2022-01-19_1642619534.0941286/model/epoch19.pth.tar'
+        saved_model_path = '/home/robot/weight_files/epoch17.pth.tar'
+        
         # self.clip_len = 16
         # saved_model_path = '/home/rb/downloaded_models/epoch30.pth.tar'
         # mconf = GPTConfig(vocab_size=100, block_size=self.clip_len*2, max_timestep=7,
@@ -139,6 +143,7 @@ class RHCNode(rhcbase.RHCBase):
             rate.sleep()
 
     def apply_network(self):
+        start = time.time()
         # organize the scan input
         x_imgs = torch.zeros(1,self.clip_len,self.nx,self.ny)
         y_imgs = torch.zeros(1,1,self.nx,self.ny)
@@ -146,17 +151,22 @@ class RHCNode(rhcbase.RHCBase):
         y_act = None
         
         
-        while True:
-            try:
-                queue_list = self.q_scans.queue
-                if len(queue_list)==self.clip_len+1:
-                    break
-            except ValueError:
-                print("EXCEPTION: diff number of images, or read at the wrong time")
+        self.scan_lock.acquire()
+        queue_list = list(self.q_scans.queue)
+        queue_size = self.q_scans.qsize()
+        self.scan_lock.release()
+
+        # while True:
+        #     try:
+        #         queue_list = self.q_scans.queue
+        #         if len(queue_list)==self.clip_len+1:
+        #             break
+        #     except ValueError:
+        #         print("EXCEPTION: diff number of images, or read at the wrong time")
         
         idx = 0
         for img in queue_list:
-            if idx==self.q_scans.qsize()-1:
+            if idx==queue_size-1:
                 y_imgs[0,0,:] = torch.tensor(img)
             else:
                 x_imgs[0,idx,:] = torch.tensor(img)
@@ -171,11 +181,16 @@ class RHCNode(rhcbase.RHCBase):
         x_act = x_act.to(self.device)
         # y_act = y_act.to(self.device)
 
+        finish_processing = time.time()
+        # rospy.loginfo("processing delay: "+str(finish_processing-start))
+
         # organize the action input
         with torch.set_grad_enabled(False):
             action_pred, loss = self.model(x_imgs, x_act, y_imgs, y_act)
             action_pred = action_pred.cpu().flatten().item()
-        
+        finished_network = time.time()
+        # rospy.loginfo("network delay: "+str(finished_network-finish_processing))
+
         # de-normalize
         action_pred = pre.denorm_angle(action_pred)
         return action_pred
@@ -232,11 +247,16 @@ class RHCNode(rhcbase.RHCBase):
 
     def cb_scan(self, msg):
         # remove oldest element if the queue is already full
+        self.scan_lock.acquire()
         if self.q_scans.full():
             self.compute_network = True  # start running the network in the main loop from now on
             self.q_scans.get()  # remove the oldest element, will be replaced next
+        self.scan_lock.release()
         # add new processed scan
-        self.q_scans.put(self.process_scan(msg)) # store matrices from 0-1 with the scans
+        tmp = self.process_scan(msg)
+        self.scan_lock.acquire()
+        self.q_scans.put(tmp) # store matrices from 0-1 with the scans
+        self.scan_lock.release()
         
 
     def setup_pub_sub(self):
