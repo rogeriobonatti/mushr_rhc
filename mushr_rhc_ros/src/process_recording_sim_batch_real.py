@@ -13,14 +13,14 @@ def extract_bag_variables(bag_name):
     angles = np.zeros((bag.get_message_count('mux/ackermann_cmd_mux/input/navigation'),2), dtype=np.float)
     active = np.zeros((bag.get_message_count('mux/ackermann_cmd_mux/active'),2), dtype=np.float)
     scans = np.zeros((bag.get_message_count('scan'),721), dtype=np.float)
-    poses = np.zeros((bag.get_message_count('car_pose'),4), dtype=np.float)
+    poses = np.zeros((bag.get_message_count('particle_filter/inferred_pose'),4), dtype=np.float)
     goals = np.zeros((bag.get_message_count('rhcontroller/goal'),4), dtype=np.float)
     idx_dict = {
         "experiments/finished": 0,
         "mux/ackermann_cmd_mux/input/navigation": 0,
         "mux/ackermann_cmd_mux/active": 0,
         "scan": 0,
-        "car_pose": 0,
+        "particle_filter/inferred_pose": 0,
         "rhcontroller/goal": 0
     }
     finished_dict = {
@@ -32,14 +32,15 @@ def extract_bag_variables(bag_name):
     active_dict = {
         "Default": 0,
         "Navigation": 1,
-        "idle": 2
+        "idle": 2,
+        'Teleoperation': 3
     }
     # fill the data structures
     for topic, msg, t in bag.read_messages(topics=['experiments/finished', 
                                                    'mux/ackermann_cmd_mux/input/navigation',
                                                    'mux/ackermann_cmd_mux/active',
                                                    'scan',
-                                                   'car_pose',
+                                                   'particle_filter/inferred_pose',
                                                    'rhcontroller/goal']):
         idx = idx_dict[topic]
         if topic == 'experiments/finished':
@@ -55,7 +56,7 @@ def extract_bag_variables(bag_name):
             scans[idx, 0] = msg.header.stamp.to_sec()
             # scans[idx, 0] = t.to_sec()
             scans[idx, 1:] = msg.ranges
-        elif topic == 'car_pose':
+        elif topic == 'particle_filter/inferred_pose':
             poses[idx, 0] = msg.header.stamp.to_sec()
             poses[idx, 1] = msg.pose.position.x
             poses[idx, 2] = msg.pose.position.y
@@ -138,7 +139,7 @@ def process_folder(folder, processed_dataset_path):
 
 
 # define script parameters
-base_folder = '/home/azureuser/hackathon_data/hackathon_data_slow_nonoise'
+base_folder = '/home/azureuser/hackathon_data/real'
 output_folder_name = 'processed_withpose2'
 folders_list = sorted(glob.glob(os.path.join(base_folder, '*')))
 total_n_folders = len(folders_list)
