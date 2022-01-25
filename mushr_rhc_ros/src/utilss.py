@@ -24,3 +24,4 @@ def rospose_to_posetup(posemsg):
     y = posemsg.position.y
     th = rosquaternion_to_angle(posemsg.orientation)
     return x, y, th
+

@@ -3,6 +3,7 @@
 # Copyright (c) 2019, The Personal Robotics Lab, The MuSHR Team, The Contributors of MuSHR
 # License: BSD 3-Clause. See LICENSE.md file in root directory.
 
+from torchsummary import summary
 import sys
 import os
 import signal
@@ -29,7 +30,8 @@ import librhc.utils as utils_other
 
 import torch
 from mingpt.model_resnetdirect import ResnetDirect, ResnetDirectWithActions
-from mingpt.model_musher import GPT, GPTConfig
+# from mingpt.model_musher import GPT, GPTConfig
+from mingpt.model_mushr_rogerio import GPT, GPTConfig
 import preprocessing_utils as pre
 
 class RHCNode(rhcbase.RHCBase):
@@ -65,26 +67,32 @@ class RHCNode(rhcbase.RHCBase):
         self.default_angle = 0.0
         self.nx = None
         self.ny = None
+        self.reset_counter = 0
         
         # network loading
         print("Starting to load model")
         os.environ["CUDA_VISIBLE_DEVICES"]=str(0)
         device = torch.device('cuda')
         
-        self.clip_len = 8
-        self.restype = 'resnet50'
-        model = ResnetDirectWithActions(device, clip_len=self.clip_len, restype=self.restype)
-        saved_model_path = '/home/rb/hackathon_data/aml_outputs/log_output/test_m18/ResnetDirectWithActionss_lr_test_m18_cli_8_mod_ResnetDirectWithActions_2022-01-14_1642196742.9677417_2022-01-14_1642196742.9677548/model/epoch17.pth.tar'
-        # saved_model_path = '/home/rb/hackathon_data/aml_outputs/log_output/test_m19/ResnetDirectWithActionss_lr_test_m19_cli_8_mod_ResnetDirectWithActions_2022-01-19_1642619534.094115_2022-01-19_1642619534.0941286/model/epoch19.pth.tar'
-        # saved_model_path = '/home/robot/weight_files/epoch17.pth.tar'
-        
-        # self.clip_len = 16
+        self.clip_len = 16
         # saved_model_path = '/home/rb/downloaded_models/epoch30.pth.tar'
-        # mconf = GPTConfig(vocab_size=100, block_size=self.clip_len*2, max_timestep=7,
+        saved_model_path = '/home/rb/hackathon_data/aml_outputs/log_output/gpt_resnet18_0/GPTgpt_resnet18_4gpu_2022-01-24_1642987604.6403077_2022-01-24_1642987604.640322/model/epoch15.pth.tar'
+        vocab_size = 100
+        block_size = self.clip_len * 2
+        max_timestep = 7
+        # mconf = GPTConfig(vocab_size, block_size, max_timestep,
         #               n_layer=6, n_head=8, n_embd=128, model_type='GPT', use_pred_state=True,
-        #               state_tokenizer='conv2D', pretrained_encoder_path=saved_model_path, loss='MSE', train_mode='e2e')
-        # model = GPT(mconf, device)
-        
+        #               state_tokenizer='conv2D', train_mode='e2e', pretrained_model_path='')
+        mconf = GPTConfig(vocab_size, block_size, max_timestep,
+                      n_layer=6, n_head=8, n_embd=128, model_type='GPT', use_pred_state=True,
+                      state_tokenizer='resnet18', train_mode='e2e', pretrained_model_path='', pretrained_encoder_path='', loss='MSE')              
+        model = GPT(mconf, device)
+        model=torch.nn.DataParallel(model)
+
+        # ckpt = torch.load('/home/rb/downloaded_models/epoch30.pth.tar')['state_dict']
+        # for key in ckpt:
+        #     print('********',key)
+        # model.load_state_dict(torch.load('/home/rb/downloaded_models/epoch30.pth.tar')['state_dict'], strict=True)
         
         checkpoint = torch.load(saved_model_path)
         model.load_state_dict(checkpoint['state_dict'])
@@ -100,6 +108,46 @@ class RHCNode(rhcbase.RHCBase):
             self.q_actions.put(self.default_angle)
         self.last_action = self.default_angle
         self.compute_network = False
+        self.priming_phase = True
+        self.time_last_reset = rospy.Time.now()
+        self.priming_array_straight = np.array([[3.0, 0.0, 0.0]])
+        self.priming_array_zigzag = np.array([[0.1, 0.0, 0.0],
+                                             [0.2, 0.0, -0.2],
+                                             [0.4, -0.2, 0.34],
+                                             [0.6, 0.34, -0.34],
+                                             [0.8, -0.34, 0.34],
+                                             [1.2, 0.34, -0.34],
+                                             [1.4, -0.34, 0.34],
+                                             [1.6, 0.34, -0.34],
+                                             [1.8, -0.34, 0.34],
+                                             [2.0, 0.34, -0.34],
+                                             [2.2, -0.34, 0.34],
+                                             [2.4, 0.34, -0.34],
+                                             [2.6, -0.34, 0.34],
+                                             [2.8, 0.34, -0.34],])
+        self.priming_array_curve = np.array([[2.9, 0.0, 0.0],
+                                             [3.0, 0.0, -0.34],
+                                             [3.65, -0.34, -0.34],
+                                             [3.75, -0.34, 0.0],
+                                             [6.0, 0.0, 0.0],
+                                             [6.1, 0.0, -0.34],
+                                             [6.75, -0.34, -0.34],
+                                             [6.85, -0.34, 0.0],
+                                             [8.0, 0.0, 0.0]])
+
+    def find_row(self, t, table):
+        # table contains Tf, amin, amax
+        # T init is zero
+        t_prev = 0.0
+        for i in range(table.shape[0]):
+            if t>=t_prev and t<table[i,0]:
+                # this is the correct row
+                frac = (t-t_prev)/(table[i,0]-t_prev)
+                print("Frac: {:.2f}".format(frac))
+                return table[i,1] + frac*(table[i,2]-table[i,1]), True
+            t_prev = table[i,0]
+        return table[-1,2], False # return the last action and stop priming from now on
+        
 
     def start(self):
         self.logger.info("Starting RHController")
@@ -126,11 +174,20 @@ class RHCNode(rhcbase.RHCBase):
         while not rospy.is_shutdown() and self.run:
 
             # check if we should reset the vehicle if crashed
-            if self.check_reset(rate_hz):
+            if self.check_reset_improved(rate_hz):
                 rospy.loginfo("Resetting the car's position")
 
             # publish next action
-            if self.compute_network:
+            if self.priming_phase:
+                time_diff = (rospy.Time.now()-self.time_last_reset).to_sec()
+                # compute some action that depends on the model priming logic, and not the network
+                self.last_action, self.priming_phase = self.find_row(time_diff, self.priming_array_straight) 
+                # self.last_action, self.priming_phase = self.find_row(time_diff, self.priming_array_zigzag)          
+                # self.last_action, self.priming_phase = self.find_row(time_diff, self.priming_array_curve)
+                self.q_actions.get()  # remove the oldest action from the queue
+                self.q_actions.put(self.last_action)
+                rospy.loginfo("Priming: "+str(self.last_action))
+            elif self.compute_network:
                 # don't have to run the network at all times, only when scans change and scans are full
                 self.last_action = self.apply_network()
                 self.q_actions.get()  # remove the oldest action from the queue
@@ -176,24 +233,50 @@ class RHCNode(rhcbase.RHCBase):
             x_act[0,idx] = torch.tensor(act)
             idx+=1
 
+        x_imgs = x_imgs.contiguous().view(1, self.clip_len, 200*200)
         x_imgs = x_imgs.to(self.device)
-        y_imgs = y_imgs.to(self.device)
+        # y_imgs = y_imgs.to(self.device)
+
+        x_act = x_act.view(1, self.clip_len , 1)
         x_act = x_act.to(self.device)
         # y_act = y_act.to(self.device)
+
+        t = np.ones((1, 1, 1), dtype=int) * 7
+        t = torch.tensor(t)
+        t = t.to(self.device)
 
         finish_processing = time.time()
         # rospy.loginfo("processing delay: "+str(finish_processing-start))
 
         # organize the action input
         with torch.set_grad_enabled(False):
-            action_pred, loss = self.model(x_imgs, x_act, y_imgs, y_act)
-            action_pred = action_pred.cpu().flatten().item()
+            action_pred, loss = self.model(states=x_imgs, actions=x_act, targets=x_act, timesteps=t)
+            action_pred = action_pred[0,self.clip_len-1,0].cpu().flatten().item()
         finished_network = time.time()
         # rospy.loginfo("network delay: "+str(finished_network-finish_processing))
 
         # de-normalize
         action_pred = pre.denorm_angle(action_pred)
         return action_pred
+
+    def check_reset_improved(self, rate_hz):
+        # condition if the car gets stuck
+        if self.inferred_pose_prev() is not None and self.time_started is not None:
+            v = np.linalg.norm(np.asarray(self.inferred_pose())-np.asarray(self.inferred_pose_prev())) * rate_hz
+            if v < 0.05 and rospy.Time.now().to_sec() - self.time_started.to_sec() > 1.0:
+                # this means that the car was supposed to follow a traj, but velocity is too low bc it's stuck
+                # first we reset the car pose
+                self.reset_counter +=1
+        if self.reset_counter >5:
+            self.send_initial_pose()
+            rospy.loginfo("Got stuck, resetting pose of the car to default value")
+            msg = String()
+            msg.data = "got stuck"
+            self.expr_at_goal.publish(msg)
+            self.reset_counter = 0
+            return True
+        else:
+            return False
 
     def check_reset(self, rate_hz):
         # condition if the car gets stuck
@@ -221,12 +304,21 @@ class RHCNode(rhcbase.RHCBase):
         # msg.pose.pose.position.y = hp_world_valid[new_pos_idx][1]
         # msg.pose.pose.position.z = 0.0
         # quat = utilss.angle_to_rosquaternion(hp_world_valid[new_pos_idx][1])
-        msg.pose.pose.position.x = 4.12211 + (np.random.rand()-0.5)*2.0*0.5
-        msg.pose.pose.position.y = -7.49623 + (np.random.rand()-0.5)*2.0*0.5
+        
+        # msg.pose.pose.position.x = 4.12211 + (np.random.rand()-0.5)*2.0*0.5
+        # msg.pose.pose.position.y = -7.49623 + (np.random.rand()-0.5)*2.0*0.5
+        # msg.pose.pose.position.z = 0.0
+        # quat = utilss.angle_to_rosquaternion(np.radians(62.373 + (np.random.rand()-0.5)*2.0*3))
+        
+        msg.pose.pose.position.x = 0.0767436203959 + (np.random.rand()-0.5)*2.0*0.1
+        msg.pose.pose.position.y = -17.7567761914 + (np.random.rand()-0.5)*2.0*0.1
         msg.pose.pose.position.z = 0.0
-        quat = utilss.angle_to_rosquaternion(np.radians(62.373 + (np.random.rand()-0.5)*2.0*360))
+        quat = utilss.angle_to_rosquaternion(np.radians(67.032 + (np.random.rand()-0.5)*2.0*1))
+        
         msg.pose.pose.orientation = quat
         self.pose_reset.publish(msg)
+        self.priming_phase = True
+        self.time_last_reset = rospy.Time.now()
 
     def shutdown(self, signum, frame):
         rospy.signal_shutdown("SIGINT recieved")
