@@ -3,6 +3,7 @@
 # Copyright (c) 2019, The Personal Robotics Lab, The MuSHR Team, The Contributors of MuSHR
 # License: BSD 3-Clause. See LICENSE.md file in root directory.
 
+from torchsummary import summary
 import sys
 import os
 import signal
@@ -29,7 +30,8 @@ import librhc.utils as utils_other
 
 import torch
 from mingpt.model_resnetdirect import ResnetDirect, ResnetDirectWithActions
-from mingpt.model_musher import GPT, GPTConfig
+# from mingpt.model_musher import GPT, GPTConfig
+from mingpt.model_mushr_rogerio import GPT, GPTConfig
 import preprocessing_utils as pre
 
 class RHCNode(rhcbase.RHCBase):
@@ -61,7 +63,8 @@ class RHCNode(rhcbase.RHCBase):
         self.events = [self.goal_event, self.map_metadata_event, self.ready_event]
         self.run = True
 
-        self.default_speed = 2.5
+        # self.default_speed = 2.5
+        self.default_speed = 1.5
         self.default_angle = 0.0
         self.nx = None
         self.ny = None
@@ -71,20 +74,26 @@ class RHCNode(rhcbase.RHCBase):
         os.environ["CUDA_VISIBLE_DEVICES"]=str(0)
         device = torch.device('cuda')
         
-        self.clip_len = 8
-        self.restype = 'resnet50'
-        model = ResnetDirectWithActions(device, clip_len=self.clip_len, restype=self.restype)
-        saved_model_path = '/home/rb/hackathon_data/aml_outputs/log_output/test_m18/ResnetDirectWithActionss_lr_test_m18_cli_8_mod_ResnetDirectWithActions_2022-01-14_1642196742.9677417_2022-01-14_1642196742.9677548/model/epoch17.pth.tar'
-        # saved_model_path = '/home/rb/hackathon_data/aml_outputs/log_output/test_m19/ResnetDirectWithActionss_lr_test_m19_cli_8_mod_ResnetDirectWithActions_2022-01-19_1642619534.094115_2022-01-19_1642619534.0941286/model/epoch19.pth.tar'
-        # saved_model_path = '/home/robot/weight_files/epoch17.pth.tar'
-        
-        # self.clip_len = 16
+        self.clip_len = 16
         # saved_model_path = '/home/rb/downloaded_models/epoch30.pth.tar'
-        # mconf = GPTConfig(vocab_size=100, block_size=self.clip_len*2, max_timestep=7,
+        # saved_model_path = '/home/rb/hackathon_data/aml_outputs/log_output/gpt_resnet18_0/GPTgpt_resnet18_4gpu_2022-01-24_1642987604.6403077_2022-01-24_1642987604.640322/model/epoch15.pth.tar'
+        saved_model_path = '/home/rb/hackathon_data/aml_outputs/log_output/gpt_resnet18_8_exp2/GPTgpt_resnet18_8gpu_exp2_2022-01-25_1643076745.003202_2022-01-25_1643076745.0032148/model/epoch12.pth.tar'
+        vocab_size = 100
+        block_size = self.clip_len * 2
+        max_timestep = 7
+        # mconf = GPTConfig(vocab_size, block_size, max_timestep,
         #               n_layer=6, n_head=8, n_embd=128, model_type='GPT', use_pred_state=True,
-        #               state_tokenizer='conv2D', pretrained_encoder_path=saved_model_path, loss='MSE', train_mode='e2e')
-        # model = GPT(mconf, device)
-        
+        #               state_tokenizer='conv2D', train_mode='e2e', pretrained_model_path='')
+        mconf = GPTConfig(vocab_size, block_size, max_timestep,
+                      n_layer=6, n_head=8, n_embd=128, model_type='GPT', use_pred_state=True,
+                      state_tokenizer='resnet18', train_mode='e2e', pretrained_model_path='', pretrained_encoder_path='', loss='MSE')              
+        model = GPT(mconf, device)
+        model=torch.nn.DataParallel(model)
+
+        # ckpt = torch.load('/home/rb/downloaded_models/epoch30.pth.tar')['state_dict']
+        # for key in ckpt:
+        #     print('********',key)
+        # model.load_state_dict(torch.load('/home/rb/downloaded_models/epoch30.pth.tar')['state_dict'], strict=True)
         
         checkpoint = torch.load(saved_model_path)
         model.load_state_dict(checkpoint['state_dict'])
@@ -176,18 +185,25 @@ class RHCNode(rhcbase.RHCBase):
             x_act[0,idx] = torch.tensor(act)
             idx+=1
 
+        x_imgs = x_imgs.contiguous().view(1, self.clip_len, 200*200)
         x_imgs = x_imgs.to(self.device)
-        y_imgs = y_imgs.to(self.device)
+        # y_imgs = y_imgs.to(self.device)
+
+        x_act = x_act.view(1, self.clip_len , 1)
         x_act = x_act.to(self.device)
         # y_act = y_act.to(self.device)
+
+        t = np.ones((1, 1, 1), dtype=int) * 7
+        t = torch.tensor(t)
+        t = t.to(self.device)
 
         finish_processing = time.time()
         # rospy.loginfo("processing delay: "+str(finish_processing-start))
 
         # organize the action input
         with torch.set_grad_enabled(False):
-            action_pred, loss = self.model(x_imgs, x_act, y_imgs, y_act)
-            action_pred = action_pred.cpu().flatten().item()
+            action_pred, loss = self.model(states=x_imgs, actions=x_act, targets=x_act, timesteps=t)
+            action_pred = action_pred[0,self.clip_len-1,0].cpu().flatten().item()
         finished_network = time.time()
         # rospy.loginfo("network delay: "+str(finished_network-finish_processing))
 
