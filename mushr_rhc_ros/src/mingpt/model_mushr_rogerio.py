@@ -287,10 +287,10 @@ class GPT(nn.Module):
         # targets: (batch, block_size, 1)
         # timesteps: (batch, 1, 1) 
         if self.config.state_tokenizer == 'resnet18':
-            state_embeddings = self.state_encoder(states.reshape(-1, 1, 200 , 200).type(torch.float32).contiguous()) # (batch * block_size, n_embd)
+            state_embeddings = self.state_encoder(states.reshape(-1, 1, 200 , 200).type(torch.float16).contiguous()) # (batch * block_size, n_embd)
             state_embeddings = state_embeddings.reshape(states.shape[0], states.shape[1], self.config.n_embd) # (batch, block_size, n_embd)
         elif self.config.state_tokenizer == 'conv2D':
-            state_embeddings = self.state_encoder(states.reshape(-1, 1, 244 , 244).type(torch.float32).contiguous()) # (batch * block_size, n_embd)
+            state_embeddings = self.state_encoder(states.reshape(-1, 1, 244 , 244).type(torch.float16).contiguous()) # (batch * block_size, n_embd)
             state_embeddings = state_embeddings.reshape(states.shape[0], states.shape[1], self.config.n_embd) # (batch, block_size, n_embd)
         else:
             print('Not supported!')
@@ -298,12 +298,12 @@ class GPT(nn.Module):
         if actions is not None and self.model_type == 'GPT':
             if self.config.loss == 'MSE':
                 B, N, C = actions.shape
-                tmp = actions.view(B*N, C)
+                tmp = actions.view(B*N, C).half()
                 action_embeddings = self.action_embeddings(tmp).view(B, N, -1) # (batch, block_size, n_embd) 
 
             
             #token_embeddings = torch.zeros((states.shape[0], states.shape[1]*2 - int(targets is None), self.config.n_embd), dtype=torch.float32, device=state_embeddings.device)
-            token_embeddings = torch.zeros((states.shape[0], states.shape[1]*2 - int(targets is None), self.config.n_embd), dtype=torch.float32, device=self.device)
+            token_embeddings = torch.zeros((states.shape[0], states.shape[1]*2 - int(targets is None), self.config.n_embd), dtype=torch.float16, device=self.device)
 
             token_embeddings[:,::2,:] = state_embeddings
             token_embeddings[:,1::2,:] = action_embeddings[:,-states.shape[1] + int(targets is None):,:]

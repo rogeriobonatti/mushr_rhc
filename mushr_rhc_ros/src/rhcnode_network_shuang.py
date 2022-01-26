@@ -3,7 +3,7 @@
 # Copyright (c) 2019, The Personal Robotics Lab, The MuSHR Team, The Contributors of MuSHR
 # License: BSD 3-Clause. See LICENSE.md file in root directory.
 
-from torchsummary import summary
+# from torchsummary import summary
 import sys
 import os
 import signal
@@ -34,6 +34,9 @@ from mingpt.model_resnetdirect import ResnetDirect, ResnetDirectWithActions
 from mingpt.model_mushr_rogerio import GPT, GPTConfig
 import preprocessing_utils as pre
 
+# import torch_tensorrt
+
+
 class RHCNode(rhcbase.RHCBase):
     def __init__(self, dtype, params, logger, name):
         rospy.init_node(name, anonymous=True, disable_signals=True)
@@ -63,8 +66,8 @@ class RHCNode(rhcbase.RHCBase):
         self.events = [self.goal_event, self.map_metadata_event, self.ready_event]
         self.run = True
 
-        # self.default_speed = 2.5
         self.default_speed = 1.5
+        # self.default_speed = 1.5
         self.default_angle = 0.0
         self.nx = None
         self.ny = None
@@ -76,8 +79,9 @@ class RHCNode(rhcbase.RHCBase):
         
         self.clip_len = 16
         # saved_model_path = '/home/rb/downloaded_models/epoch30.pth.tar'
+        saved_model_path = '/home/robot/weight_files/epoch15.pth.tar'
         # saved_model_path = '/home/rb/hackathon_data/aml_outputs/log_output/gpt_resnet18_0/GPTgpt_resnet18_4gpu_2022-01-24_1642987604.6403077_2022-01-24_1642987604.640322/model/epoch15.pth.tar'
-        saved_model_path = '/home/rb/hackathon_data/aml_outputs/log_output/gpt_resnet18_8_exp2/GPTgpt_resnet18_8gpu_exp2_2022-01-25_1643076745.003202_2022-01-25_1643076745.0032148/model/epoch12.pth.tar'
+        # saved_model_path = '/home/rb/hackathon_data/aml_outputs/log_output/gpt_resnet18_8_exp2/GPTgpt_resnet18_8gpu_exp2_2022-01-25_1643076745.003202_2022-01-25_1643076745.0032148/model/epoch12.pth.tar'
         vocab_size = 100
         block_size = self.clip_len * 2
         max_timestep = 7
@@ -98,7 +102,20 @@ class RHCNode(rhcbase.RHCBase):
         checkpoint = torch.load(saved_model_path)
         model.load_state_dict(checkpoint['state_dict'])
         model.eval()
+        
+        # inputs = [torch_tensorrt.Input(
+        #     states_shape=[1, self.clip_len, 200*200],
+        #     actions_shape=[1, self.clip_len , 1],
+        #     targets_shape=[1, self.clip_len , 1],
+        #     timesteps_shape=[1, 1, 1],
+        #     dtype=torch.half,
+        # )]
+        # enabled_precisions = {torch.float, torch.half}
+        # trt_ts_module = torch_tensorrt.compile(model, inputs=inputs, enabled_precisions=enabled_precisions)
+
+        model.half()
         model.to(device)
+
         self.model = model
         self.device = device
         print("Finished loading model")
@@ -186,26 +203,29 @@ class RHCNode(rhcbase.RHCBase):
             idx+=1
 
         x_imgs = x_imgs.contiguous().view(1, self.clip_len, 200*200)
+        x_imgs.half()
         x_imgs = x_imgs.to(self.device)
         # y_imgs = y_imgs.to(self.device)
 
         x_act = x_act.view(1, self.clip_len , 1)
+        x_act.half()
         x_act = x_act.to(self.device)
         # y_act = y_act.to(self.device)
 
         t = np.ones((1, 1, 1), dtype=int) * 7
         t = torch.tensor(t)
+        t.half()
         t = t.to(self.device)
 
         finish_processing = time.time()
-        # rospy.loginfo("processing delay: "+str(finish_processing-start))
+        rospy.loginfo("processing delay: "+str(finish_processing-start))
 
         # organize the action input
         with torch.set_grad_enabled(False):
             action_pred, loss = self.model(states=x_imgs, actions=x_act, targets=x_act, timesteps=t)
             action_pred = action_pred[0,self.clip_len-1,0].cpu().flatten().item()
         finished_network = time.time()
-        # rospy.loginfo("network delay: "+str(finished_network-finish_processing))
+        rospy.loginfo("network delay: "+str(finished_network-finish_processing))
 
         # de-normalize
         action_pred = pre.denorm_angle(action_pred)
