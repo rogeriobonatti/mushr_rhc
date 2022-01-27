@@ -76,7 +76,7 @@ class MPC:
             cur_x = self.rollouts[:, t - 1]
             self.rollouts[:, t] = self.kinematics.apply(cur_x, trajs[:, t - 1])
 
-        costs = self.cost.apply(self.rollouts, g)
+        costs = self.cost.apply(self.rollouts, g, trajs)
         result, idx = self.trajgen.generate_control(trajs, costs)
         return result, self.rollouts[idx]
 

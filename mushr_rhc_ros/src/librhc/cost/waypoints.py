@@ -28,20 +28,33 @@ class Waypoints:
         self.dist_w = self.params.get_float("cost_fn/dist_w", default=1.0)
         self.obs_dist_w = self.params.get_float("cost_fn/obs_dist_w", default=5.0)
         self.cost2go_w = self.params.get_float("cost_fn/cost2go_w", default=1.0)
-        self.smoothing_discount_rate = self.params.get_float(
-            "cost_fn/smoothing_discount_rate", default=0.04
-        )
+        self.smoothing_discount_rate = self.params.get_float("cost_fn/smoothing_discount_rate", default=0.04)
+        self.penalize_right_rate = self.params.get_float("cost_fn/penalize_right", default=0.1)
+        self.penalize_right_w = self.params.get_float("cost_fn/penalize_right_w", default=0)
+        self.penalize_left_rate = self.params.get_float("cost_fn/penalize_left", default=0.1)
+        self.penalize_left_w = self.params.get_float("cost_fn/penalize_left_w", default=0)
         self.bounds_cost = self.params.get_float("cost_fn/bounds_cost", default=100.0)
 
         self.obs_dist_cooloff = torch.arange(1, self.T + 1).mul_(2).type(self.dtype)
 
+        # overall smoothness
         self.discount = self.dtype(self.T - 1)
-
         self.discount[:] = 1 + self.smoothing_discount_rate
         self.discount.pow_(torch.arange(0, self.T - 1).type(self.dtype) * -1)
+
+        # penalize right
+        self.discount_right = self.dtype(self.T)
+        self.discount_right[:] = 1 + self.penalize_right_rate
+        self.discount_right.pow_(torch.arange(0, self.T).type(self.dtype) * -1)
+
+        # penalize left
+        self.discount_left = self.dtype(self.T)
+        self.discount_left[:] = 1 + self.penalize_left_rate
+        self.discount_left.pow_(torch.arange(0, self.T).type(self.dtype) * -1)
+
         self.world_rep.reset()
 
-    def apply(self, poses, goal):
+    def apply(self, poses, goal, trajs):
         """
         Args:
         poses [(K, T, 3) tensor] -- Rollout of T positions
@@ -78,7 +91,15 @@ class Waypoints:
             .sum(dim=1)
         )
 
-        result = cost2go.add(collision_cost).add(obs_dist_cost).add(smoothness)
+        trajs_right = trajs[:,:,1].detach().clone()
+        trajs_right[trajs_right>0.0] = 0.0
+        penalize_right = self.penalize_right_w*trajs_right.abs().mul(self.discount_right).sum(dim=1)
+
+        trajs_left = trajs[:,:,1].detach().clone()
+        trajs_left[trajs_left<0.0] = 0.0
+        penalize_left = self.penalize_left_w*trajs_left.abs().mul(self.discount_left).sum(dim=1)
+
+        result = cost2go.add(collision_cost).add(obs_dist_cost).add(smoothness).add(penalize_right).add(penalize_left)
 
         # filter out all colliding trajectories
         colliding = collision_cost.nonzero()

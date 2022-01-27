@@ -12,6 +12,7 @@
             args="record -O $(arg record_path)/data.bag
             car_pose
             experiments/finished
+            experiments/language_bias
             mux/ackermann_cmd_mux/active
             mux/ackermann_cmd_mux/input/navigation
             rhcontroller/goal
