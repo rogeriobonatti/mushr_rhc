@@ -19,6 +19,7 @@
             <rosparam file="$(find mushr_rhc_ros)/launch/params/trajgen/$(arg tg).yaml" />
             <rosparam file="$(find mushr_rhc_ros)/launch/params/all_params.yaml" />
             <rosparam file="$(find mushr_rhc_ros)/launch/sim/params.yaml" />
+            <!-- <rosparam file="$(find mushr_rhc_ros)/launch/viz-paths/params.yaml" /> -->
         </node>
 
         <node pkg="mushr_rhc_ros" type="control_node.py" name="control_node" output="screen" required="true" >

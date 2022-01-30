@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 # Copyright (c) 2019, The Personal Robotics Lab, The MuSHR Team, The Contributors of MuSHR
 # License: BSD 3-Clause. See LICENSE.md file in root directory.
@@ -130,6 +130,9 @@ class RHCNode(rhcbase.RHCBase):
         direction_idx = np.random.randint(low=0, high=len(directions))
         direction_bias = directions[direction_idx]
         self.direction_bias = direction_idx
+        # hard-code values
+        direction_bias = 'left'
+        self.speed = 2.0
         if direction_bias=='left':
             w_right = 100
             w_left = 0

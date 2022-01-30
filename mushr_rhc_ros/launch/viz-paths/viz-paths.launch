@@ -7,7 +7,7 @@
         <env name="RHC_USE_CUDA" value="0" />
 
         <rosparam file="$(find mushr_rhc_ros)/launch/params/trajgen/$(arg tg).yaml" />
-        <rosparam file="$(find mushr_rhc_ros)/launch/all_params.yaml" />
+        <rosparam file="$(find mushr_rhc_ros)/launch/params/all_params.yaml" />
         <rosparam file="$(find mushr_rhc_ros)/launch/viz-paths/params.yaml" />
     </node>
 </launch>

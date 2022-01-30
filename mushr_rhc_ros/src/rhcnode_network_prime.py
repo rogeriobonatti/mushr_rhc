@@ -30,8 +30,8 @@ import librhc.utils as utils_other
 
 import torch
 from mingpt.model_resnetdirect import ResnetDirect, ResnetDirectWithActions
-# from mingpt.model_musher import GPT, GPTConfig
-from mingpt.model_mushr_rogerio import GPT, GPTConfig
+from mingpt.model_musher import GPT, GPTConfig
+# from mingpt.model_mushr_rogerio import GPT, GPTConfig
 import preprocessing_utils as pre
 
 class RHCNode(rhcbase.RHCBase):
@@ -195,9 +195,52 @@ class RHCNode(rhcbase.RHCBase):
                 rospy.loginfo("Applied network: "+str(self.last_action))
                 self.compute_network = False
             
+            self.publish_vel_marker()
             self.publish_traj(self.default_speed, self.last_action)
 
             rate.sleep()
+    
+    def publish_vel_marker(self):
+        marker = Marker()
+        marker.header.frame_id = "/car/base_link"
+        marker.header.stamp = rospy.Time.now()
+        marker.type = 0 # arrow
+        marker.id = 0
+
+        # Set the scale of the marker
+        marker.scale.x = 1
+        marker.scale.y = 0.1
+        marker.scale.z = 0.1
+
+        # Set the color
+        marker.color.r = 1.0
+        marker.color.g = 0.0
+        marker.color.b = 0.0
+        marker.color.a = 1.0
+
+        # set the first point
+        # point_start = Point()
+        # point_start.x = point_start.y = point_start.z = 0.0
+        # marker.points.append(point_start)
+
+        # l = 5.0
+        # point_end = Point()
+        # point_end.x = l*np.cos(self.last_action)
+        # point_end.y = l*np.sin(self.last_action)
+        # point_end.z = 0.0
+        # marker.points.append(point_end)
+
+        # Set the pose of the marker
+        marker.pose.position.x = 0.32
+        marker.pose.position.y = 0
+        marker.pose.position.z = 0
+        marker.pose.orientation = utilss.angle_to_rosquaternion(self.last_action)
+        # marker.pose.orientation.x = 0.0
+        # marker.pose.orientation.y = 0.0
+        # marker.pose.orientation.z = 0.0
+        # marker.pose.orientation.w = 1.0
+
+        self.vel_marker_pub.publish(marker)
 
     def apply_network(self):
         start = time.time()
@@ -381,6 +424,8 @@ class RHCNode(rhcbase.RHCBase):
             AckermannDriveStamped,
             queue_size=2,
         )
+
+        self.vel_marker_pub = rospy.Publisher("/model_action_marker", Marker, queue_size = 1)
 
         self.pose_reset = rospy.Publisher("/initialpose", PoseWithCovarianceStamped, queue_size=1)
 
