@@ -1,0 +1,39 @@
+<launch>
+    <arg name="tg" default="dispersion_language" />
+	<arg name="map_server" default="1" />
+	<arg name="car_name" default="car" />
+
+    <group if="$(arg map_server)">
+	<include file="$(find mushr_rhc_ros)/launch/map_server.launch" />
+    </group>
+
+    <group ns="$(arg car_name)">
+        <node pkg="mushr_rhc_ros" type="rhcnode_record_language.py" name="rhcontroller" output="screen">
+            <env name="RHC_USE_CUDA" value="0" />
+
+            <param name="inferred_pose_t" value="car_pose" />
+	        <!-- <param name="inferred_pose_t" value="particle_filter/inferred_pose" /> -->
+
+            <param name="car_name" value="$(arg car_name)" />
+
+            <rosparam file="$(find mushr_rhc_ros)/launch/params/trajgen/$(arg tg).yaml" />
+            <rosparam file="$(find mushr_rhc_ros)/launch/params/all_params.yaml" />
+            <rosparam file="$(find mushr_rhc_ros)/launch/sim/params.yaml" />
+            <!-- <rosparam file="$(find mushr_rhc_ros)/launch/viz-paths/params.yaml" /> -->
+        </node>
+
+        <node pkg="mushr_rhc_ros" type="control_node.py" name="control_node" output="screen" required="true" >
+        </node>
+
+        <!-- <node pkg="mushr_rhc_ros" type="rhcdebug.py" name="rhcdebug" output="screen">
+        <env name="RHC_USE_CUDA" value="0" />
+
+		<param name="inferred_pose_t" value="car_pose" />
+
+        <rosparam file="$(find mushr_rhc_ros)/launch/params/trajgen/$(arg tg).yaml" />
+		<rosparam file="$(find mushr_rhc_ros)/launch/params/all_params.yaml" />
+        <rosparam file="$(find mushr_rhc_ros)/launch/debug/params.yaml" />
+        </node> -->
+
+    </group>
+</launch>
