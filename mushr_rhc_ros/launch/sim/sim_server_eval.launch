@@ -3,19 +3,21 @@
 	<arg name="map_server" default="1" />
 	<arg name="car_name" default="car" />
 
+    <arg name="out_path" default="/home/rb/hackathon_data/e2e_eval/model_test" />
+    <arg name="model_path" default="/home/rb/hackathon_data/aml_outputs/log_output/normal-kingfish/GPTiros_e2e_8gpu_2022-02-17_1645120431.7528405_2022-02-17_1645120431.7528613/model/epoch10.pth.tar" />
+
     <group if="$(arg map_server)">
 	<include file="$(find mushr_rhc_ros)/launch/map_server.launch" />
     </group>
 
     <group ns="$(arg car_name)">
         <node pkg="mushr_rhc_ros" type="rhcnode_network_iros.py" name="rhcontroller" output="screen">
-        <!-- <node pkg="mushr_rhc_ros" type="rhcnode_network_shuang.py" name="rhcontroller" output="screen"> -->
-        <!-- <node pkg="mushr_rhc_ros" type="rhcnode_network.py" name="rhcontroller" output="screen"> -->
-        <!-- <node pkg="mushr_rhc_ros" type="rhcnode_network_prime.py" name="rhcontroller" output="screen"> -->
             <env name="RHC_USE_CUDA" value="0" />
 
+            <param name="out_path" value="$(arg out_path)" />
+            <param name="model_path" value="$(arg model_path)" />
+
             <param name="inferred_pose_t" value="car_pose" />
-	        <!-- <param name="inferred_pose_t" value="particle_filter/inferred_pose" /> -->
 
             <param name="car_name" value="$(arg car_name)" />
 
@@ -24,4 +26,5 @@
             <rosparam file="$(find mushr_rhc_ros)/launch/sim/params.yaml" />
         </node>
     </group>
+
 </launch>

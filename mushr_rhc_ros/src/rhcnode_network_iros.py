@@ -82,7 +82,9 @@ class RHCNode(rhcbase.RHCBase):
         self.clip_len = 16
 
         # tests for IROS
-        saved_model_path = '/home/rb/hackathon_data/aml_outputs/log_output/normal-kingfish/GPTiros_e2e_8gpu_2022-02-17_1645120431.7528405_2022-02-17_1645120431.7528613/model/epoch10.pth.tar'
+        saved_model_path = rospy.get_param("~model_path", 'default_value')
+        self.out_path = rospy.get_param("~out_path", 'default_value')
+        # saved_model_path = '/home/rb/hackathon_data/aml_outputs/log_output/normal-kingfish/GPTiros_e2e_8gpu_2022-02-17_1645120431.7528405_2022-02-17_1645120431.7528613/model/epoch10.pth.tar'
 
         # saved_model_path = '/home/rb/downloaded_models/epoch30.pth.tar'
         # saved_model_path = '/home/robot/weight_files/epoch15.pth.tar'
@@ -120,7 +122,7 @@ class RHCNode(rhcbase.RHCBase):
         # enabled_precisions = {torch.float, torch.half}
         # trt_ts_module = torch_tensorrt.compile(model, inputs=inputs, enabled_precisions=enabled_precisions)
 
-        model.half()
+        # model.half()
         model.to(device)
 
         self.model = model
@@ -133,6 +135,12 @@ class RHCNode(rhcbase.RHCBase):
             self.q_actions.put(self.default_angle)
         self.last_action = self.default_angle
         self.compute_network = False
+
+        # parameters for model evaluation
+        self.reset_counter = 0
+        self.last_reset_time = time.time()
+        self.distance_so_far = 0.0
+        self.file_name = os.path.join(self.out_path,'info.csv')
 
     def start(self):
         self.logger.info("Starting RHController")
@@ -168,7 +176,7 @@ class RHCNode(rhcbase.RHCBase):
                 self.last_action = self.apply_network()
                 self.q_actions.get()  # remove the oldest action from the queue
                 self.q_actions.put(self.last_action)
-                rospy.loginfo("Applied network: "+str(self.last_action))
+                # rospy.loginfo("Applied network: "+str(self.last_action))
                 self.compute_network = False
             
             self.publish_vel_marker()
@@ -255,29 +263,29 @@ class RHCNode(rhcbase.RHCBase):
             idx+=1
 
         x_imgs = x_imgs.contiguous().view(1, self.clip_len, 200*200)
-        x_imgs.half()
+        # x_imgs.half()
         x_imgs = x_imgs.to(self.device)
         # y_imgs = y_imgs.to(self.device)
 
         x_act = x_act.view(1, self.clip_len , 1)
-        x_act.half()
+        # x_act.half()
         x_act = x_act.to(self.device)
         # y_act = y_act.to(self.device)
 
         t = np.ones((1, 1, 1), dtype=int) * 7
         t = torch.tensor(t)
-        t.half()
+        # t.half()
         t = t.to(self.device)
 
         finish_processing = time.time()
-        rospy.loginfo("processing delay: "+str(finish_processing-start))
+        # rospy.loginfo("processing delay: "+str(finish_processing-start))
 
         # organize the action input
         with torch.set_grad_enabled(False):
-            action_pred, loss = self.model(states=x_imgs, actions=x_act, targets=x_act, timesteps=t)
+            action_pred, loss = self.model(states=x_imgs, actions=x_act, targets=x_act, gt_map=None, timesteps=t)
             action_pred = action_pred[0,self.clip_len-1,0].cpu().flatten().item()
         finished_network = time.time()
-        rospy.loginfo("network delay: "+str(finished_network-finish_processing))
+        # rospy.loginfo("network delay: "+str(finished_network-finish_processing))
 
         # de-normalize
         action_pred = pre.denorm_angle(action_pred)
@@ -286,17 +294,36 @@ class RHCNode(rhcbase.RHCBase):
     def check_reset(self, rate_hz):
         # condition if the car gets stuck
         if self.inferred_pose_prev() is not None and self.time_started is not None:
-            v = np.linalg.norm(np.asarray(self.inferred_pose())-np.asarray(self.inferred_pose_prev())) * rate_hz
+            # calculate distance traveled
+            delta_dist = np.linalg.norm(np.asarray(self.inferred_pose())-np.asarray(self.inferred_pose_prev()))
+            self.distance_so_far += delta_dist
+            # look at speed and termination condition
+            v = delta_dist * rate_hz
             if v < 0.05 and rospy.Time.now().to_sec() - self.time_started.to_sec() > 1.0:
                 # this means that the car was supposed to follow a traj, but velocity is too low bc it's stuck
                 # first we reset the car pose
-                self.send_initial_pose()
-                rospy.loginfo("Got stuck, resetting pose of the car to default value")
-                msg = String()
-                msg.data = "got stuck"
-                self.expr_at_goal.publish(msg)
-                return True
-        return False
+                self.reset_counter +=1
+        if self.reset_counter > 5:
+            self.send_initial_pose()
+            rospy.loginfo("Got stuck, resetting pose of the car to default value")
+            msg = String()
+            msg.data = "got stuck"
+            self.expr_at_goal.publish(msg)
+            self.reset_counter = 0
+            # save distance data to file and reset distance
+            delta_time = time.time() - self.last_reset_time
+            new_line = np.array([self.distance_so_far, delta_time])
+            print("Distance: {}  | Time: {}".format(self.distance_so_far, delta_time))
+            with open(self.file_name,'a') as fd:
+                fd.write(str(self.distance_so_far)+','+str(delta_time)+'\n')
+            # self.out_file = open(self.file_name,'ab')
+            # np.savetxt(self.out_file, new_line, delimiter=',')
+            # self.out_file.close()
+            self.distance_so_far = 0.0
+            self.last_reset_time = time.time()
+            return True
+        else:
+            return False
 
     def send_initial_pose(self):
         # sample a initial pose for the car based on the valid samples
