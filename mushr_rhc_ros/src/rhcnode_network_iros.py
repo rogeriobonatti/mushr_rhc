@@ -52,6 +52,8 @@ class RHCNode(rhcbase.RHCBase):
         self.inferred_pose_lock_prev = threading.Lock()
         self._inferred_pose = None
         self._inferred_pose_prev = None
+        self._time_of_inferred_pose = None
+        self._time_of_inferred_pose_prev = None
 
         self.hp_zerocost_ids = None
         self.hp_map = None
@@ -140,6 +142,7 @@ class RHCNode(rhcbase.RHCBase):
         self.reset_counter = 0
         self.last_reset_time = time.time()
         self.distance_so_far = 0.0
+        self.time_so_far = 0.0
         self.file_name = os.path.join(self.out_path,'info.csv')
 
     def start(self):
@@ -293,33 +296,39 @@ class RHCNode(rhcbase.RHCBase):
 
     def check_reset(self, rate_hz):
         # condition if the car gets stuck
-        if self.inferred_pose_prev() is not None and self.time_started is not None:
+        if self.inferred_pose_prev() is not None and self.time_started is not None and self._time_of_inferred_pose is not None and self._time_of_inferred_pose_prev is not None:
             # calculate distance traveled
             delta_dist = np.linalg.norm(np.asarray(self.inferred_pose())-np.asarray(self.inferred_pose_prev()))
-            self.distance_so_far += delta_dist
-            # look at speed and termination condition
-            v = delta_dist * rate_hz
+            v = 2.0 # default value
+            if delta_dist < 0.5:
+                delta_time_poses = (self._time_of_inferred_pose-self._time_of_inferred_pose_prev).to_sec()
+                self.distance_so_far += delta_dist
+                self.time_so_far += delta_time_poses
+                # look at speed and termination condition
+                v = delta_dist / delta_time_poses
+                print('v = {}'.format(v))
             if v < 0.05 and rospy.Time.now().to_sec() - self.time_started.to_sec() > 1.0:
                 # this means that the car was supposed to follow a traj, but velocity is too low bc it's stuck
                 # first we reset the car pose
                 self.reset_counter +=1
-        if self.reset_counter > 5:
+        if self.reset_counter > 5 :
+            # save distance data to file and reset distance
+            delta_time = time.time() - self.last_reset_time
+            print("Distance: {}  | Time: {} | Time so far: {}".format(self.distance_so_far, delta_time, self.time_so_far))
+            with open(self.file_name,'a') as fd:
+                fd.write(str(self.distance_so_far)+','+str(self.time_so_far)+'\n')
             self.send_initial_pose()
             rospy.loginfo("Got stuck, resetting pose of the car to default value")
             msg = String()
             msg.data = "got stuck"
             self.expr_at_goal.publish(msg)
             self.reset_counter = 0
-            # save distance data to file and reset distance
-            delta_time = time.time() - self.last_reset_time
-            new_line = np.array([self.distance_so_far, delta_time])
-            print("Distance: {}  | Time: {}".format(self.distance_so_far, delta_time))
-            with open(self.file_name,'a') as fd:
-                fd.write(str(self.distance_so_far)+','+str(delta_time)+'\n')
+            # new_line = np.array([self.distance_so_far, delta_time])
             # self.out_file = open(self.file_name,'ab')
             # np.savetxt(self.out_file, new_line, delimiter=',')
             # self.out_file.close()
             self.distance_so_far = 0.0
+            self.time_so_far = 0.0
             self.last_reset_time = time.time()
             return True
         else:
@@ -455,7 +464,9 @@ class RHCNode(rhcbase.RHCBase):
     def cb_pose(self, msg):
         if self.inferred_pose is not None:
             self.set_inferred_pose_prev(self.inferred_pose())
+            self._time_of_inferred_pose_prev = self._time_of_inferred_pose
         self.set_inferred_pose(self.dtype(utilss.rospose_to_posetup(msg.pose)))
+        self._time_of_inferred_pose = msg.header.stamp
 
         if self.cur_rollout is not None and self.cur_rollout_ip is not None:
             m = Marker()
