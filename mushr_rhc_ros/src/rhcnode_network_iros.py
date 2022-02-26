@@ -306,7 +306,7 @@ class RHCNode(rhcbase.RHCBase):
                 self.time_so_far += delta_time_poses
                 # look at speed and termination condition
                 v = delta_dist / delta_time_poses
-                print('v = {}'.format(v))
+                # print('v = {}'.format(v))
             if v < 0.05 and rospy.Time.now().to_sec() - self.time_started.to_sec() > 1.0:
                 # this means that the car was supposed to follow a traj, but velocity is too low bc it's stuck
                 # first we reset the car pose
