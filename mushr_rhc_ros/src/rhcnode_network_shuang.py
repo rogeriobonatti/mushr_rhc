@@ -31,8 +31,8 @@ import librhc.utils as utils_other
 import torch
 from mingpt.model_resnetdirect import ResnetDirect, ResnetDirectWithActions
 # from mingpt.model_musher import GPT, GPTConfig
-# from mingpt.model_mushr_rogerio import GPT, GPTConfig
-from mingpt.model_mushr_iros import GPT, GPTConfig
+from mingpt.model_mushr_rogerio import GPT, GPTConfig
+# from mingpt.model_mushr_iros import GPT, GPTConfig
 import preprocessing_utils as pre
 from visualization_msgs.msg import Marker
 
@@ -81,12 +81,17 @@ class RHCNode(rhcbase.RHCBase):
         
         self.clip_len = 16
 
+        # fine-tuned in real life
+        # saved_model_path = '/home/robot/weight_files/epoch0.pth.tar'
+        # saved_model_path = '/home/rb/downloaded_models/epoch30.pth.tar'
+
         # tests for IROS
-        saved_model_path = '/home/rb/hackathon_data/aml_outputs/log_output/normal-kingfish/GPTiros_e2e_8gpu_2022-02-17_1645120431.7528405_2022-02-17_1645120431.7528613/model/epoch10.pth.tar'
+        # saved_model_path = '/home/rb/hackathon_data/aml_outputs/log_output/normal-kingfish/GPTiros_e2e_8gpu_2022-02-17_1645120431.7528405_2022-02-17_1645120431.7528613/model/epoch10.pth.tar'
 
         # saved_model_path = '/home/rb/downloaded_models/epoch30.pth.tar'
+
         # saved_model_path = '/home/robot/weight_files/epoch15.pth.tar'
-        # saved_model_path = '/home/rb/hackathon_data/aml_outputs/log_output/gpt_resnet18_0/GPTgpt_resnet18_4gpu_2022-01-24_1642987604.6403077_2022-01-24_1642987604.640322/model/epoch15.pth.tar'
+        saved_model_path = '/home/rb/hackathon_data/aml_outputs/log_output/gpt_resnet18_0/GPTgpt_resnet18_4gpu_2022-01-24_1642987604.6403077_2022-01-24_1642987604.640322/model/epoch15.pth.tar'
         # saved_model_path = '/home/rb/hackathon_data/aml_outputs/log_output/gpt_resnet18_8_exp2/GPTgpt_resnet18_8gpu_exp2_2022-01-25_1643076745.003202_2022-01-25_1643076745.0032148/model/epoch12.pth.tar'
         vocab_size = 100
         block_size = self.clip_len * 2
@@ -168,7 +173,7 @@ class RHCNode(rhcbase.RHCBase):
                 self.last_action = self.apply_network()
                 self.q_actions.get()  # remove the oldest action from the queue
                 self.q_actions.put(self.last_action)
-                rospy.loginfo("Applied network: "+str(self.last_action))
+                # rospy.loginfo("Applied network: "+str(self.last_action))
                 self.compute_network = False
             
             self.publish_vel_marker()
@@ -270,14 +275,14 @@ class RHCNode(rhcbase.RHCBase):
         t = t.to(self.device)
 
         finish_processing = time.time()
-        rospy.loginfo("processing delay: "+str(finish_processing-start))
+        # rospy.loginfo("processing delay: "+str(finish_processing-start))
 
         # organize the action input
         with torch.set_grad_enabled(False):
             action_pred, loss = self.model(states=x_imgs, actions=x_act, targets=x_act, timesteps=t)
             action_pred = action_pred[0,self.clip_len-1,0].cpu().flatten().item()
         finished_network = time.time()
-        rospy.loginfo("network delay: "+str(finished_network-finish_processing))
+        # rospy.loginfo("network delay: "+str(finished_network-finish_processing))
 
         # de-normalize
         action_pred = pre.denorm_angle(action_pred)
