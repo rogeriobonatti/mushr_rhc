@@ -8,7 +8,7 @@
     </group>
 
     <group ns="$(arg car_name)">
-        <node pkg="mushr_rhc_ros" type="rhcnode_network_iros.py" name="rhcontroller" output="screen">
+        <node pkg="mushr_rhc_ros" type="rhcnode_network_nips.py" name="rhcontroller" output="screen">
         <!-- <node pkg="mushr_rhc_ros" type="rhcnode_network_shuang.py" name="rhcontroller" output="screen"> -->
         <!-- <node pkg="mushr_rhc_ros" type="rhcnode_network.py" name="rhcontroller" output="screen"> -->
         <!-- <node pkg="mushr_rhc_ros" type="rhcnode_network_prime.py" name="rhcontroller" output="screen"> -->
@@ -18,6 +18,8 @@
 	        <!-- <param name="inferred_pose_t" value="particle_filter/inferred_pose" /> -->
 
             <param name="car_name" value="$(arg car_name)" />
+
+            <!-- <param name="model_path" value="/home/rb/hackathon_data/aml_outputs/log_output/normal-kingfish/GPTiros_e2e_8gpu_2022-02-17_1645120431.7528405_2022-02-17_1645120431.7528613/model/epoch10.pth.tar" /> -->
 
             <rosparam file="$(find mushr_rhc_ros)/launch/params/trajgen/$(arg tg).yaml" />
             <rosparam file="$(find mushr_rhc_ros)/launch/params/all_params.yaml" />
