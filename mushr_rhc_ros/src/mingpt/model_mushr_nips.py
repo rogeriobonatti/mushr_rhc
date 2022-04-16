@@ -10,6 +10,7 @@ GPT model:
 from base64 import encode
 import math
 import logging
+from collections import OrderedDict
 
 import torch
 import torch.nn as nn
@@ -152,29 +153,32 @@ class GPT(nn.Module):
             self.state_encoder = nn.Sequential(nn.Conv2d(1, 32, 8, stride=4, padding=0), nn.ReLU(),
                                      nn.Conv2d(32, 64, 4, stride=2, padding=0), nn.ReLU(),
                                      nn.Conv2d(64, 64, 3, stride=1, padding=0), nn.ReLU(),
-                                     nn.Flatten(), nn.Linear(36864, config.n_embd), nn.Tanh())
+                                     nn.Flatten(), nn.Linear(36864, config.n_embd), nn.ReLU())
         elif config.state_tokenizer == 'resnet18':
             self.state_encoder = nn.Sequential(resnet18_custom(pretrained=False, clip_len=1), nn.ReLU(),
                                                nn.Linear(1000, config.n_embd), nn.Tanh())
-
-        self.ret_emb = nn.Sequential(nn.Linear(1, config.n_embd), nn.Tanh())
 
         # add map decoder
         encoded_feat_dim = (config.n_embd * config.block_size) // 2
         if config.map_decoder == 'mlp':
             #MLP map decoder
-            self.map_decoder = nn.Sequential(nn.Linear(encoded_feat_dim, 1024), nn.Tanh(),
-                                             nn.Linear(1024, 2048), nn.Tanh(),
-                                             nn.Linear(2048, 64*64), nn.Tanh())
+            self.map_decoder = nn.Sequential(nn.Linear(encoded_feat_dim, 1024), 
+                                             nn.ReLU(),
+                                             nn.Linear(1024, 2048), 
+                                             nn.ReLU(),
+                                             nn.Linear(2048, 64*64), 
+                                             nn.Tanh())
         elif config.map_decoder == 'deconv':
             if self.map_recon_dim == 64:
                 # conv2d map decoder - original
-                self.map_decoder = nn.Sequential(nn.Linear(encoded_feat_dim, 4096), nn.Tanh(),
+                self.map_decoder = nn.Sequential(nn.Linear(encoded_feat_dim, 4096), 
+                                                 nn.ReLU(),
                                                  Reshape(16, 16, 16),
                                                  MapDecoder_2x_Deconv(16))
             elif self.map_recon_dim == 128:
                 # conv2d map decoder - new trial
-                self.map_decoder = nn.Sequential(nn.Linear(encoded_feat_dim, 4096), nn.Tanh(),
+                self.map_decoder = nn.Sequential(nn.Linear(encoded_feat_dim, 4096), 
+                                                 nn.ReLU(),
                                                  Reshape(16, 16, 16),
                                                  MapDecoder_4x_Deconv128px(16))
             else:
@@ -205,7 +209,7 @@ class GPT(nn.Module):
                               nn.ReLU(),
                               nn.Linear(64, 32),
                               nn.ReLU(),
-                              nn.Linear(32, 4)
+                              nn.Linear(32, 3)
         )
 
         self.predict_state = nn.Sequential(
@@ -213,30 +217,42 @@ class GPT(nn.Module):
         )
 
         criterion = torch.nn.MSELoss(reduction='mean')
-        # self.criterion = criterion.cuda(device)
+        self.criterion = criterion.cuda(device)
 
         self.load_pretrained_model_weights(config.pretrained_model_path)
 
         
     def load_pretrained_model_weights(self, model_path):
         if model_path:
-            ckpt = torch.load(model_path)['state_dict']  # COMPASS checkpoint format.
-            ckpt2 = {}
-            ckpt3 = {}
-            ckpt4 = {}
-            for key in ckpt:
-                print(key)
-                if key.startswith('blocks'):
-                    ckpt2[key.replace('blocks.', '')] = ckpt[key]
-                if key.startswith('state_encoder'):
-                    ckpt3[key.replace('state_encoder.', '')] = ckpt[key]
-                if key.startswith('action_embeddings'):
-                    ckpt4[key.replace('action_embeddings.', '')] = ckpt[key]
-                
-            self.blocks.load_state_dict(ckpt2)
-            self.state_encoder.load_state_dict(ckpt3)
-            self.action_embeddings.load_state_dict(ckpt4)
+            checkpoint = torch.load(model_path, map_location=self.device)
+            new_checkpoint = OrderedDict()
+            for key in checkpoint['state_dict'].keys():
+                new_checkpoint[key.split("module.",1)[1]] = checkpoint['state_dict'][key]
+            self.load_state_dict(new_checkpoint)
             print('Successfully loaded pretrained checkpoint: {}.'.format(model_path))
+            # for key in ckpt:
+            #     print(key)
+
+            # for param in self.parameters():
+            #     print(param)
+
+            # ckpt = torch.load(model_path)['state_dict']  # COMPASS checkpoint format.
+            # ckpt2 = {}
+            # ckpt3 = {}
+            # ckpt4 = {}
+            # for key in ckpt:
+            #     print(key)
+            #     if key.startswith('blocks'):
+            #         ckpt2[key.replace('blocks.', '')] = ckpt[key]
+            #     if key.startswith('state_encoder'):
+            #         ckpt3[key.replace('state_encoder.', '')] = ckpt[key]
+            #     if key.startswith('action_embeddings'):
+            #         ckpt4[key.replace('action_embeddings.', '')] = ckpt[key]
+                
+            # self.blocks.load_state_dict(ckpt)
+            # self.state_encoder.load_state_dict(ckpt3)
+            # self.action_embeddings.load_state_dict(ckpt4)
+            # print('Successfully loaded pretrained checkpoint: {}.'.format(model_path))
         else:
             print('Train from scratch.')
 
@@ -314,7 +330,7 @@ class GPT(nn.Module):
         return optimizer
 
     # state, and action
-    def forward(self, states, actions, targets=None, gt_map=None, timesteps=None, poses=None):
+    def forward(self, states, actions, targets=None, gt_map=None, timesteps=None, poses=None, compute_loss=True):
         # states: (batch, block_size, 4*84*84)
         # actions: (batch, block_size, 1)
         # targets: (batch, block_size, 1)
@@ -363,7 +379,15 @@ class GPT(nn.Module):
             map_recon = self.map_decoder(feat)
         elif self.config.train_mode == 'loc':
             pose_preds = self.predict_pose(x[:, ::2, :])
-            pose_preds[:,:,2:] = torch.tanh(pose_preds[:,:,2:])
+            # pose_preds[:,:,2:] = torch.tanh(pose_preds[:,:,2:])
+        elif self.config.train_mode == 'joint':
+            action_preds = self.predict_action(x[:, ::2, :])
+            percep_feat = x[:, ::2, :]
+            B, N, D = percep_feat.shape
+            feat = percep_feat.reshape(B, -1)  # reshape to a vector
+            map_recon = self.map_decoder(feat)
+            pose_preds = self.predict_pose(x[:, ::2, :])
+            # pose_preds[:,:,2:] = torch.tanh(pose_preds[:,:,2:])
         else:
             print('Not support!')
 
@@ -371,16 +395,24 @@ class GPT(nn.Module):
         loss = None
         if targets is not None:
             if self.config.train_mode == 'map':
-                # loss = self.criterion(map_recon.reshape(-1, self.map_recon_dim, self.map_recon_dim), gt_map)
-                return map_recon, 0.0
+                if compute_loss:
+                    loss = self.criterion(map_recon.reshape(-1, self.map_recon_dim, self.map_recon_dim), gt_map)
+                return map_recon, loss
             elif self.config.train_mode == 'e2e':
                 # loss over N timesteps
-                # loss = self.criterion(actions, action_preds)
-                return action_preds, 0.0 
+                if compute_loss:
+                    loss = self.criterion(actions, action_preds)
+                return action_preds, loss 
             elif self.config.train_mode == 'loc':
                 # loss over N timesteps
-                # loss = self.criterion(poses, pose_preds)
-                return pose_preds, 0.0
+                if compute_loss:
+                    loss_translation = self.criterion(poses[:,:,:2],pose_preds[:,:,:2])
+                    loss_angle = self.criterion(poses[:,:,2],pose_preds[:,:,2])
+                    # scale angle loss, similar to DeepVO paper (they use factor of 100, but car is moving faster)
+                    loss = loss_translation + 10.0*loss_angle
+                return pose_preds, loss
+            elif self.config.train_mode == 'joint':
+                return action_preds, map_recon, pose_preds
 
 class MapDecoder_4x_Deconv(nn.Module):
     def __init__(self, in_channels=384):
