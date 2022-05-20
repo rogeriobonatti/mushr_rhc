@@ -5,6 +5,9 @@
     <arg name="map" default="$(find mushr_rhc_ros)/maps/bravern_13_mod.yaml" />
     <arg name="c2g_map" default="$(find mushr_rhc_ros)/maps/bravern_13_mod.yaml" />
 
+    <!-- <arg name="map" default="$(find mushr_rhc_ros)/maps/map_12f_cropped.yaml" />
+    <arg name="c2g_map" default="$(find mushr_rhc_ros)/maps/map_12f_cropped.yaml" /> -->
+
     <node pkg="map_server" name="map_server" type="map_server" args="$(arg map)"/>
     <node pkg="map_server" name="c2g_map" type="map_server" args="$(arg c2g_map)">
         <remap from="/static_map" to="/c2g/static_map" />

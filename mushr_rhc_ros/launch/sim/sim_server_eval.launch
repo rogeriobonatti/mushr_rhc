@@ -3,15 +3,33 @@
 	<arg name="map_server" default="1" />
 	<arg name="car_name" default="car" />
 
+    <!-- <arg name="out_path" default="/home/rb/hackathon_data/e2e_eval/model_test" />
+    <arg name="model_path" default="/home/rb/hackathon_data/aml_outputs/log_output/normal-kingfish/GPTiros_e2e_8gpu_2022-02-17_1645120431.7528405_2022-02-17_1645120431.7528613/model/epoch10.pth.tar" /> -->
+
+    <!-- current model! -->
+    <!-- <arg name="out_path" default="/home/rb/hackathon_data/e2e_eval/model_test" />
+    <arg name="model_path" default="/home/rb/hackathon_data/aml_outputs/log_output/deep-adder/GPTnips_e2e_2022-04-06_1649220643.529554_2022-04-06_1649220643.5295672/model/epoch21.pth.tar" /> -->
+
+    <!-- <arg name="out_path" default="/home/rb/hackathon_data/e2e_eval/model_test" />
+    <arg name="model_path" default="/home/rb/hackathon_data/aml_outputs/log_output/renewed-colt/GPTnips_8gpu_relu_e2e_slow_bias_2022-04-02_1648869033.3693378_2022-04-02_1648869033.36935/model/epoch22.pth.tar" /> -->
+
+    <!-- <arg name="out_path" default="/home/rb/hackathon_data/e2e_eval/model_test" />
+    <arg name="model_path" default="/home/rb/hackathon_data/aml_outputs/log_output/mushr_nips/GPTnips_8gpu_relu_e2e_slow_2022-03-31_1648698385.6160257_2022-03-31_1648698385.6160388/model/epoch5.pth.tar" /> -->
+
+    <!-- current model! -->
+    <!-- <arg name="out_path" default="/home/rb/hackathon_data/e2e_eval/model_test" />
+    <arg name="model_path" default="/home/rb/hackathon_data/aml_outputs/log_output/tough-mongoose/GPTnips_e2e_2022-04-07_1649355173.7379868_2022-04-07_1649355173.7379994/model/epoch22.pth.tar" /> -->
+
+    <!-- current model! -->
     <arg name="out_path" default="/home/rb/hackathon_data/e2e_eval/model_test" />
-    <arg name="model_path" default="/home/rb/hackathon_data/aml_outputs/log_output/normal-kingfish/GPTiros_e2e_8gpu_2022-02-17_1645120431.7528405_2022-02-17_1645120431.7528613/model/epoch10.pth.tar" />
+    <arg name="model_path" default="/home/rb/hackathon_data/aml_outputs/log_output/mushr-repro-pointnet/GPTmushr_pretrain_2022-05-03_1651565415.7992048_2022-05-03_1651565415.7992141/model/epoch22.pth.tar" />
 
     <group if="$(arg map_server)">
 	<include file="$(find mushr_rhc_ros)/launch/map_server.launch" />
     </group>
 
     <group ns="$(arg car_name)">
-        <node pkg="mushr_rhc_ros" type="rhcnode_network_iros.py" name="rhcontroller" output="screen">
+        <node pkg="mushr_rhc_ros" type="rhcnode_network_pcl.py" name="rhcontroller" output="screen">
             <env name="RHC_USE_CUDA" value="0" />
 
             <param name="out_path" value="$(arg out_path)" />
