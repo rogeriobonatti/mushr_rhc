@@ -21,8 +21,9 @@
     <arg name="model_path" default="/home/rb/hackathon_data/aml_outputs/log_output/tough-mongoose/GPTnips_e2e_2022-04-07_1649355173.7379868_2022-04-07_1649355173.7379994/model/epoch22.pth.tar" /> -->
 
     <!-- current model! -->
-    <arg name="out_path" default="/home/rb/hackathon_data/e2e_eval/model_test" />
-    <arg name="model_path" default="/home/rb/hackathon_data/aml_outputs/log_output/mushr-repro-pointnet/GPTmushr_pretrain_2022-05-03_1651565415.7992048_2022-05-03_1651565415.7992141/model/epoch22.pth.tar" />
+    <arg name="out_path" default="/home/rb/hackathon_data_premium/e2e_eval/model_test" />
+    <arg name="model_path" default="/home/rb/hackathon_data_premium/aml_outputs/log_output/pretrain_scratch_0/GPTcorl_scratch_trainm_e2e_statet_pointnet_traini_0.3_nla_12_nhe_8_statel_0.01_2022-05-23_1653348722.8446546_2022-05-23_1653348722.844666/model/epoch29.pth.tar" />
+    <!-- <arg name="model_path" default="/home/rb/hackathon_data_premium/aml_outputs/log_output/pretrain_scratch_0/GPTcorl_scratch_trainm_e2e_statet_pointnet_traini_1_nla_6_nhe_8_statel_0.01_2022-05-23_1653348711.3057182_2022-05-23_1653348711.3057299/model/epoch12.pth.tar" /> -->
 
     <group if="$(arg map_server)">
 	<include file="$(find mushr_rhc_ros)/launch/map_server.launch" />

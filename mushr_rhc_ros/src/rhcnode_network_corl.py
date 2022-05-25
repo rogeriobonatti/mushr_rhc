@@ -35,9 +35,7 @@ import torch
 from mingpt.model_resnetdirect import ResnetDirect, ResnetDirectWithActions
 # from mingpt.model_musher import GPT, GPTConfig
 # from mingpt.model_mushr_rogerio import GPT, GPTConfig
-# from mingpt.model_mushr_nips import GPT, GPTConfig
-# from mingpt.model_mushr_new import GPT, GPTdiff, GPTConfig
-from mingpt.model_mushr_new2 import GPT, GPTConfig
+from mingpt.model_mushr_nips import GPT, GPTConfig
 import preprocessing_utils as pre
 from visualization_msgs.msg import Marker
 
@@ -88,7 +86,6 @@ class RHCNode(rhcbase.RHCBase):
         self.points_viz_list = None
         self.map_recon = None
         self.loc_counter = 0
-        self.time_sent_reset = None
         
         # network loading
         print("Starting to load model")
@@ -102,29 +99,33 @@ class RHCNode(rhcbase.RHCBase):
         # tests for IROS
         saved_model_path = rospy.get_param("~model_path", 'default_value')
         self.out_path = rospy.get_param("~out_path", 'default_value')
+        # saved_model_path = '/home/rb/hackathon_data/aml_outputs/log_output/normal-kingfish/GPTiros_e2e_8gpu_2022-02-17_1645120431.7528405_2022-02-17_1645120431.7528613/model/epoch10.pth.tar'
 
+        # saved_model_path = '/home/rb/downloaded_models/epoch30.pth.tar'
+        # saved_model_path = '/home/robot/weight_files/epoch15.pth.tar'
+        # saved_model_path = '/home/rb/hackathon_data/aml_outputs/log_output/gpt_resnet18_0/GPTgpt_resnet18_4gpu_2022-01-24_1642987604.6403077_2022-01-24_1642987604.640322/model/epoch15.pth.tar'
+        # saved_model_path = '/home/rb/hackathon_data/aml_outputs/log_output/gpt_resnet18_8_exp2/GPTgpt_resnet18_8gpu_exp2_2022-01-25_1643076745.003202_2022-01-25_1643076745.0032148/model/epoch12.pth.tar'
         vocab_size = 100
         block_size = self.clip_len * 2
-        max_timestep = self.clip_len
-
-        mconf = GPTConfig(block_size, max_timestep,
-                      n_layer=12, n_head=8, n_embd=128, model_type='GPT', use_pred_state=True,
-                      state_tokenizer='pointnet', pretrained_encoder_path='',
-                      loss='MSE', train_mode='e2e', pretrained_model_path='',
-                      map_decoder='deconv', map_recon_dim=64, freeze_core=False,
-                      state_loss_weight=0.1,
-                      loc_x_loss_weight=0.01, loc_y_loss_weight=0.1, loc_angle_loss_weight=10.0)
+        max_timestep = 7
+        # mconf = GPTConfig(vocab_size, block_size, max_timestep,
+        #               n_layer=6, n_head=8, n_embd=128, model_type='GPT', use_pred_state=True,
+        #               state_tokenizer='conv2D', train_mode='e2e', pretrained_model_path='')
+        mconf = GPTConfig(vocab_size, block_size, max_timestep,
+                      n_layer=6, n_head=8, n_embd=128, model_type='GPT', use_pred_state=True,
+                      state_tokenizer='resnet18', train_mode='e2e', pretrained_model_path='', pretrained_encoder_path='', loss='MSE',
+                      map_decoder='deconv', map_recon_dim=64)
         model = GPT(mconf, device)
         # model=torch.nn.DataParallel(model)
 
         checkpoint = torch.load(saved_model_path, map_location=device)
         # old code for loading model
-        model.load_state_dict(checkpoint['state_dict'])
+        # model.load_state_dict(checkpoint['state_dict'])
         # new code for loading mode
-        # new_checkpoint = OrderedDict()
-        # for key in checkpoint['state_dict'].keys():
-        #     new_checkpoint[key.split("module.",1)[1]] = checkpoint['state_dict'][key]
-        # model.load_state_dict(new_checkpoint)
+        new_checkpoint = OrderedDict()
+        for key in checkpoint['state_dict'].keys():
+            new_checkpoint[key.split("module.",1)[1]] = checkpoint['state_dict'][key]
+        model.load_state_dict(new_checkpoint)
 
         # ckpt = torch.load('/home/rb/downloaded_models/epoch30.pth.tar')['state_dict']
         # for key in ckpt:
@@ -151,27 +152,26 @@ class RHCNode(rhcbase.RHCBase):
         # mapping model
         if self.use_map:
 
-            saved_map_model_path = '/home/rb/hackathon_data_premium/aml_outputs/log_output/search_mapscratch_0/GPTcorl_map_scratch_trainm_map_sta_pointnet_traini_1_nla_12_nhe_8_2022-05-24_1653375425.3910758_2022-05-24_1653375425.3910873/model/epoch7.pth.tar'
+            # saved_map_model_path = '/home/rb/hackathon_data/aml_outputs/log_output/tough-mongoose/GPTnips_map_2022-04-07_1649355173.7984643_2022-04-07_1649355173.7984767/model/epoch10.pth.tar'
 
-            mconf_map = GPTConfig(block_size, max_timestep,
-                      n_layer=12, n_head=8, n_embd=128, model_type='GPT', use_pred_state=True,
-                      state_tokenizer='pointnet', pretrained_encoder_path='',
-                      loss='MSE', train_mode='map', pretrained_model_path='',
-                      map_decoder='deconv', map_recon_dim=64, freeze_core=False,
-                      state_loss_weight=0.1,
-                      loc_x_loss_weight=0.01, loc_y_loss_weight=0.1, loc_angle_loss_weight=10.0)
-            map_model = GPT(mconf_map, device)
+            saved_map_model_path = '/home/rb/hackathon_data/aml_outputs/log_output/humble-bee/GPTnips_map_finetune_nofreeze_2022-04-12_1649739603.323518_2022-04-12_1649739603.3235295/model/epoch29.pth.tar'
+            # saved_map_model_path = '/home/rb/hackathon_data/aml_outputs/log_output/easy-hornet/GPTnips_map_finetune_2022-04-11_1649705561.8950737_2022-04-11_1649705561.895087/model/epoch15.pth.tar'
+
+            map_mconf = GPTConfig(vocab_size, block_size, max_timestep,
+                          n_layer=6, n_head=8, n_embd=128, model_type='GPT', use_pred_state=True,
+                          state_tokenizer='resnet18', train_mode='map', pretrained_model_path='', pretrained_encoder_path='', loss='MSE',
+                          map_decoder='deconv', map_recon_dim=64)
+            map_model = GPT(map_mconf, device)
             # map_model=torch.nn.DataParallel(map_model)
-
             checkpoint = torch.load(saved_map_model_path, map_location=device)
 
             # old code for loading model
-            map_model.load_state_dict(checkpoint['state_dict'])
+            # map_model.load_state_dict(checkpoint['state_dict'])
             # new code for loading mode
-            # new_checkpoint = OrderedDict()
-            # for key in checkpoint['state_dict'].keys():
-            #     new_checkpoint[key.split("module.",1)[1]] = checkpoint['state_dict'][key]
-            # map_model.load_state_dict(new_checkpoint)
+            new_checkpoint = OrderedDict()
+            for key in checkpoint['state_dict'].keys():
+                new_checkpoint[key.split("module.",1)[1]] = checkpoint['state_dict'][key]
+            map_model.load_state_dict(new_checkpoint)
             
             map_model.eval()
             map_model.to(device)
@@ -179,28 +179,28 @@ class RHCNode(rhcbase.RHCBase):
 
         # localization model
         if self.use_loc:
+            # saved_loc_model_path = '/home/rb/hackathon_data/aml_outputs/log_output/perfect-weevil/GPTnips_loc_1000xangle_2022-04-08_1649429799.7040765_2022-04-08_1649429799.7040896/model/epoch13.pth.tar'
 
-            saved_loc_model_path = '/home/rb/hackathon_data_premium/aml_outputs/log_output/search_locscratch_0/GPTcorl_loc_scratch_trainm_loc_sta_pointnet_traini_1_nla_12_nhe_8_locx_0.1_locy_0.1_loca_10_2022-05-24_1653375699.1418056_2022-05-24_1653375699.1418178/model/epoch10.pth.tar'
-            
-            mconf_loc = GPTConfig(block_size, max_timestep,
-                      n_layer=12, n_head=8, n_embd=128, model_type='GPT', use_pred_state=True,
-                      state_tokenizer='pointnet', pretrained_encoder_path='',
-                      loss='MSE', train_mode='loc', pretrained_model_path='',
-                      map_decoder='deconv', map_recon_dim=64, freeze_core=False,
-                      state_loss_weight=0.1,
-                      loc_x_loss_weight=0.01, loc_y_loss_weight=0.1, loc_angle_loss_weight=10.0)
-            loc_model = GPT(mconf_loc, device)
+            # saved_loc_model_path = '/home/rb/hackathon_data/aml_outputs/log_output/humble-bee/GPTnips_loc_1trans1000xangle_finetune_nofreeze_2022-04-12_1649739606.8248725_2022-04-12_1649739606.824885/model/epoch29.pth.tar'
+            saved_loc_model_path = '/home/rb/hackathon_data/aml_outputs/log_output/easy-hornet/GPTnips_loc_1trans1000xangle_finetune_2022-04-11_1649705562.0525122_2022-04-11_1649705562.0525265/model/epoch29.pth.tar'
+            # saved_loc_model_path = '/home/rb/hackathon_data/aml_outputs/log_output/vital-ray/GPTnips_loc_0p01trans100xangle_2022-04-11_1649694076.4556465_2022-04-11_1649694076.4556613/model/epoch11.pth.tar'
+            # saved_loc_model_path = '/home/rb/hackathon_data/aml_outputs/log_output/literate-flea/GPTnips_loc_0p01trans1xangle_2022-04-08_1649430057.8460536_2022-04-08_1649430057.8460662/model/epoch9.pth.tar'
+            # saved_loc_model_path = '/home/rb/hackathon_data/aml_outputs/log_output/stirring-cricket/GPTnips_loc_1xangle_2022-04-07_1649355866.8893065_2022-04-07_1649355866.8893213/model/epoch9.pth.tar'
+            loc_mconf = GPTConfig(vocab_size, block_size, max_timestep,
+                          n_layer=6, n_head=8, n_embd=128, model_type='GPT', use_pred_state=True,
+                          state_tokenizer='resnet18', train_mode='loc', pretrained_model_path='', pretrained_encoder_path='', loss='MSE',
+                          map_decoder='deconv', map_recon_dim=64)
+            loc_model = GPT(loc_mconf, device)
             # map_model=torch.nn.DataParallel(map_model)
-
             checkpoint = torch.load(saved_loc_model_path, map_location=device)
 
             # old code for loading model
-            loc_model.load_state_dict(checkpoint['state_dict'])
+            # loc_model.load_state_dict(checkpoint['state_dict'])
             # new code for loading mode
-            # new_checkpoint = OrderedDict()
-            # for key in checkpoint['state_dict'].keys():
-            #     new_checkpoint[key.split("module.",1)[1]] = checkpoint['state_dict'][key]
-            # loc_model.load_state_dict(new_checkpoint)
+            new_checkpoint = OrderedDict()
+            for key in checkpoint['state_dict'].keys():
+                new_checkpoint[key.split("module.",1)[1]] = checkpoint['state_dict'][key]
+            loc_model.load_state_dict(new_checkpoint)
             
             loc_model.eval()
             loc_model.to(device)
@@ -227,8 +227,8 @@ class RHCNode(rhcbase.RHCBase):
 
         # set timer callbacks for visualization
         rate_map_display = 1.0
-        rate_loc_display = 20
-        self.map_viz_timer = rospy.Timer(rospy.Duration(1.0 / rate_map_display), self.map_viz_cb)
+        rate_loc_display = 10
+        # self.map_viz_timer = rospy.Timer(rospy.Duration(1.0 / rate_map_display), self.map_viz_cb)
         self.map_viz_loc = rospy.Timer(rospy.Duration(1.0 / rate_loc_display), self.loc_viz_cb)
 
 
@@ -330,12 +330,12 @@ class RHCNode(rhcbase.RHCBase):
             self.loc_current_pose_marker_pub.publish(self.create_position_marker(self.current_pose, color=[1,0,0,1]))
         
     def loc_viz_cb(self, timer):
-        if self.compute_network_loc is False or self.time_sent_reset is None:
+        if self.compute_network_loc is False:
             return
-        # self.pos_lock.acquire()
-        # pos_queue_list = list(self.q_pos.queue)
-        # pos_size = len(pos_queue_list)
-        # self.pos_lock.release()
+        self.pos_lock.acquire()
+        pos_queue_list = list(self.q_pos.queue)
+        pos_size = len(pos_queue_list)
+        self.pos_lock.release()
 
         # create anchor pose for localization
         if time.time()-self.time_sent_reset>3.0 and self.did_reset is True:
@@ -356,18 +356,16 @@ class RHCNode(rhcbase.RHCBase):
             start = time.time()
             # with torch.set_grad_enabled(False):
             with torch.inference_mode():
-                pose_preds, _, _, _, _ = self.loc_model(states=x_imgs, actions=x_act, targets=x_act, gt_map=None, timesteps=t, poses=None, compute_loss=False)
+                pose_preds, loss = self.loc_model(states=x_imgs, actions=x_act, targets=x_act, gt_map=None, timesteps=t, poses=None, compute_loss=False)
             finished_loc_network = time.time()
             rospy.loginfo("loc network delay: "+str(finished_loc_network-start))
             # publish anchor pose of the map center
             self.loc_anchor_pose_marker_pub.publish(self.create_position_marker(self.pose_anchor, color=[0,0,1,1]))
             # publish the current accumulated pose
-            # delta_pose_pred = pose_preds[0,self.clip_len-1,:].cpu().numpy()
-            delta_pose_pred = pose_preds[0,-1,:].cpu().numpy()
+            delta_pose_pred = pose_preds[0,self.clip_len-1,:].cpu().numpy()
             # calculate the change in coordinates
             self.current_frame = self.transform_poses(self.current_frame, delta_pose_pred)
             self.loc_current_pose_marker_pub.publish(self.create_position_marker(self.current_frame, color=[1,0,0,1]))
-            self.compute_network_loc = False
 
         # if pos_size==16 and self.has_loc_anchor is True:
         #     x_imgs, x_act, t = self.prepare_model_inputs()
@@ -547,10 +545,10 @@ class RHCNode(rhcbase.RHCBase):
         # with torch.set_grad_enabled(False):
         with torch.inference_mode():
             # action_pred = 0.0
-            action_pred, _, _, _ = self.model(states=x_imgs, actions=x_act, targets=x_act, gt_map=None, timesteps=t, poses=None, compute_loss=False)
+            action_pred, loss = self.model(states=x_imgs, actions=x_act, targets=x_act, gt_map=None, timesteps=t, poses=None, compute_loss=False)
             finished_action_network = time.time()
             rospy.loginfo("action network delay: "+str(finished_action_network-start))
-            action_pred = action_pred[0,-1,0].cpu().flatten().item()
+            action_pred = action_pred[0,self.clip_len-1,0].cpu().flatten().item()
             # if self.use_map:
             #     map_pred, loss = self.map_model(states=x_imgs, actions=x_act, targets=x_act, gt_map=None, timesteps=t, poses=None)
             #     finished_map_network = time.time()
@@ -569,7 +567,7 @@ class RHCNode(rhcbase.RHCBase):
     def prepare_model_inputs(self):
         start = time.time()
         # organize the scan input
-        x_imgs = torch.zeros(1,self.clip_len,720,2)
+        x_imgs = torch.zeros(1,self.clip_len,self.nx,self.ny)
         x_act = torch.zeros(1,self.clip_len)
         
         self.scan_lock.acquire()
@@ -582,25 +580,21 @@ class RHCNode(rhcbase.RHCBase):
             x_imgs[0,idx,:] = torch.tensor(img)
             idx+=1
         idx = 0
-
         self.act_lock.acquire()
         for act in self.q_actions.queue:
             x_act[0,idx] = torch.tensor(act)
             idx+=1
         self.act_lock.release()
 
-        # x_imgs = x_imgs.contiguous().view(1, self.clip_len, 200*200)
+        x_imgs = x_imgs.contiguous().view(1, self.clip_len, 200*200)
         x_imgs = x_imgs.to(self.device)
 
         x_act = x_act.view(1, self.clip_len , 1)
         x_act = x_act.to(self.device)
 
-        t = torch.arange(0, self.clip_len).view(1,-1).to(self.device)
-        t = t.repeat(1,1)
-
-        # t = np.ones((1, 1, 1), dtype=int) * 7
-        # t = torch.tensor(t)
-        # t = t.to(self.device)
+        t = np.ones((1, 1, 1), dtype=int) * 7
+        t = torch.tensor(t)
+        t = t.to(self.device)
 
         finish_processing = time.time()
         # rospy.loginfo("processing delay: "+str(finish_processing-start))
@@ -617,8 +611,7 @@ class RHCNode(rhcbase.RHCBase):
                 self.distance_so_far += delta_dist
                 self.time_so_far += delta_time_poses
                 # look at speed and termination condition
-                if delta_time_poses > 0.001:
-                    v = delta_dist / delta_time_poses
+                v = delta_dist / delta_time_poses
                 # print('v = {}'.format(v))
             if v < 0.05 and rospy.Time.now().to_sec() - self.time_started.to_sec() > 1.0:
                 # this means that the car was supposed to follow a traj, but velocity is too low bc it's stuck
@@ -710,9 +703,11 @@ class RHCNode(rhcbase.RHCBase):
         scan[0] = msg.header.stamp.to_sec()
         scan[1:] = msg.ranges
         original_points, sensor_origins, time_stamps, pc_range, voxel_size, lo_occupied, lo_free = pre.load_params(scan)
-        points_to_save = np.zeros(shape=(720,2))
-        points_to_save[:original_points.shape[0],:] = original_points[:,:2]
-        return points_to_save
+        vis_mat, nx, ny = pre.compute_bev_image(original_points, sensor_origins, time_stamps, pc_range, voxel_size)
+        if self.nx is None:
+            self.nx = nx
+            self.ny = ny
+        return vis_mat
 
     def cb_scan(self, msg):
 
@@ -735,19 +730,17 @@ class RHCNode(rhcbase.RHCBase):
         # remove oldest element if the queue is already full
         self.scan_lock.acquire()
         if self.q_scans.full():
+            self.compute_network = True  # start running the network in the main loop from now on
+            self.compute_network_loc = True
+            self.loc_counter += 1
             self.q_scans.get()  # remove the oldest element, will be replaced next
         self.scan_lock.release()
         
         # add new processed scan
         tmp = self.process_scan(msg)
         self.scan_lock.acquire()
-        self.q_scans.put(tmp)
+        self.q_scans.put(tmp) # store matrices from 0-1 with the scans
         self.scan_lock.release()
-
-        # control flags for other processes are activated now that queues have been updated
-        self.compute_network = True  # start running the network in the main loop from now on
-        self.compute_network_loc = True
-        self.loc_counter += 1
         
 
     def setup_pub_sub(self):
