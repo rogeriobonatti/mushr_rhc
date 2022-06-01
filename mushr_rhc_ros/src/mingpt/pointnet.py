@@ -4,7 +4,6 @@ import torch.nn.init as init
 import torch.nn.functional as F
 from torch.autograd import Variable
 
-
 class PCL_encoder(nn.Module):
     def __init__(self, feat_size):
         """
@@ -31,7 +30,9 @@ class PCL_encoder(nn.Module):
             nn.ReLU(),
         )
 
-        self.encoder = nn.Sequential(nn.Linear(1024, 256), nn.ReLU(), nn.Linear(256, feat_size))
+        self.encoder = nn.Sequential(
+            nn.Linear(1024, 512), nn.ReLU(), nn.Linear(512, 256), nn.ReLU(), nn.Linear(256, feat_size)
+        )
 
         self.weight_init()
 

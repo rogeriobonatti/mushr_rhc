@@ -49,10 +49,11 @@ class RHCNode(rhcbase.RHCBase):
         rospy.init_node(name, anonymous=True, disable_signals=True)
 
         super(RHCNode, self).__init__(dtype, params, logger)
+        
+        self.small_queue_lock = threading.Lock() # for mapping and action prediction
+        self.large_queue_lock = threading.Lock() # for localization
+        self.pos_lock = threading.Lock() # for storing the vehicle pose
 
-        self.scan_lock = threading.Lock()
-        self.pos_lock = threading.Lock()
-        self.act_lock = threading.Lock()
         self.curr_pose = None
 
         self.reset_lock = threading.Lock()
@@ -83,12 +84,13 @@ class RHCNode(rhcbase.RHCBase):
         self.default_angle = 0.0
         self.nx = None
         self.ny = None
-        self.use_map = True
+        self.use_map = False
         self.use_loc = True
         self.points_viz_list = None
         self.map_recon = None
         self.loc_counter = 0
         self.time_sent_reset = None
+        self.current_frame = None
         
         # network loading
         print("Starting to load model")
@@ -182,7 +184,7 @@ class RHCNode(rhcbase.RHCBase):
         # localization model
         if self.use_loc:
 
-            saved_loc_model_path = '/home/rb/hackathon_data_premium/aml_outputs/log_output/locscratch_new_0/GPTcorl_loc_trainm_loc_sta_pointnet_lr_6e-5_traini_1_nla_12_nhe_8_locx_0.01_locy_1_loca_10_locd_joint_2022-05-31_1653978601.5423563_2022-05-31_1653978601.5423756/model/epoch8.pth.tar'
+            saved_loc_model_path = '/home/rb/hackathon_data_premium/aml_outputs/log_output/locscratch_new_0/GPTcorl_loc_trainm_loc_sta_pointnet_lr_6e-5_traini_1_nla_12_nhe_8_locx_0.01_locy_1_loca_10_locd_joint_2022-05-31_1653978601.5423563_2022-05-31_1653978601.5423756/model/epoch17.pth.tar'
             
             mconf_loc = GPTConfig(block_size, max_timestep,
                       n_layer=12, n_head=8, n_embd=128, model_type='GPT', use_pred_state=True,
@@ -210,13 +212,12 @@ class RHCNode(rhcbase.RHCBase):
             self.loc_model = loc_model
 
 
-        self.q_scans = Queue(maxsize = self.clip_len)
-        self.q_actions = Queue(maxsize = self.clip_len)
-        self.q_pos = Queue(maxsize = self.clip_len)
-        for i in range(self.clip_len):
-            self.q_actions.put(self.default_angle)
+        self.small_queue = Queue(maxsize = self.clip_len) # stores current scan, action, pose. up to 16 elements
+        self.large_queue = Queue() # stores current scan, action, pose. no limit of elements
+
         self.last_action = self.default_angle
-        self.compute_network = False
+        self.new_scan_arrived = False
+        self.compute_network_action = False
         self.compute_network_loc = False
         self.has_loc_anchor = False
         self.did_reset = False
@@ -231,7 +232,7 @@ class RHCNode(rhcbase.RHCBase):
         # set timer callbacks for visualization
         rate_map_display = 1.0
         rate_loc_display = 20
-        self.map_viz_timer = rospy.Timer(rospy.Duration(1.0 / rate_map_display), self.map_viz_cb)
+        # self.map_viz_timer = rospy.Timer(rospy.Duration(1.0 / rate_map_display), self.map_viz_cb)
         self.map_viz_loc = rospy.Timer(rospy.Duration(1.0 / rate_loc_display), self.loc_viz_cb)
 
 
@@ -265,97 +266,76 @@ class RHCNode(rhcbase.RHCBase):
                 rospy.loginfo("Resetting the car's position")
 
             # publish next action
-            if self.compute_network:
+            if self.compute_network_action:
                 # don't have to run the network at all times, only when scans change and scans are full
                 self.last_action = self.apply_network()
-                self.act_lock.acquire()
-                self.q_actions.get()  # remove the oldest action from the queue
-                self.q_actions.put(self.last_action)
-                self.act_lock.release()
                 # rospy.loginfo("Applied network: "+str(self.last_action))
-                self.compute_network = False
+                self.compute_network_action = False
+                self.publish_vel_marker()
             
-            self.publish_vel_marker()
             self.publish_traj(self.default_speed, self.last_action)
             
             # if map is not None:
             rate.sleep()
 
     def map_viz_cb(self, timer):
-        self.pos_lock.acquire()
-        pos_queue_list = list(self.q_pos.queue)
+
+        # find the middle pose for plotting reference
+        self.small_queue_lock.acquire()
+        pos_queue_list = list(self.small_queue.queue)
+        self.small_queue_lock.release()
         pos_size = len(pos_queue_list)
-        self.pos_lock.release()
+        pose_mid = pos_queue_list[int(pos_size/2) -1][2]
+
         if pos_size==16:
-            x_imgs, x_act, t = self.prepare_model_inputs()
+            x_imgs, x_act, t = self.prepare_model_inputs(queue_type='small')
             start = time.time()
             # with torch.set_grad_enabled(False):
             with torch.inference_mode():
-                self.map_recon, loss = self.map_model(states=x_imgs, actions=x_act, targets=x_act, gt_map=None, timesteps=t, poses=None, compute_loss=False)
+                self.map_recon, _ = self.map_model(states=x_imgs, actions=x_act, targets=x_act, gt_map=None, timesteps=t, poses=None, compute_loss=False)
             finished_map_network = time.time()
             rospy.loginfo("map network delay: "+str(finished_map_network-start))
-            pose_mid = pos_queue_list[int(pos_size/2) -1]
+            
             # publish the GT pose of the map center
             self.pose_marker_pub.publish(self.create_position_marker(pose_mid))
             # publish the map itself
             self.map_marker_pub.publish(self.create_map_marker(pose_mid))
         
-    def loc_viz_cb_incremental(self, timer):
-        if self.compute_network_loc is False:
-            return
-        self.pos_lock.acquire()
-        pos_queue_list = list(self.q_pos.queue)
-        pos_size = len(pos_queue_list)
-        self.pos_lock.release()
-
-        # create anchor pose for localization
-        if time.time()-self.time_sent_reset>3.0 and self.did_reset is True:
-            self.loc_counter = 0
-            self.pose_anchor = copy.deepcopy(self.curr_pose)
-            self.current_pose = copy.deepcopy(self.pose_anchor)
-            self.has_loc_anchor = True
-            self.did_reset = False
-
-        if self.loc_counter>=1 and self.has_loc_anchor is True:
-            self.loc_counter = 0
-            x_imgs, x_act, t = self.prepare_model_inputs()
-            start = time.time()
-            # with torch.set_grad_enabled(False):
-            with torch.inference_mode():
-                pose_preds, loss = self.loc_model(states=x_imgs, actions=x_act, targets=x_act, gt_map=None, timesteps=t, poses=None, compute_loss=False)
-            finished_loc_network = time.time()
-            rospy.loginfo("loc network delay: "+str(finished_loc_network-start))
-            # publish anchor pose of the map center
-            self.loc_anchor_pose_marker_pub.publish(self.create_position_marker(self.pose_anchor, color=[0,0,1,1]))
-            # publish the current accumulated pose
-            pose_pred = pose_preds[0,self.clip_len-1,:].cpu().numpy()
-            self.current_pose = self.sum_stamped_poses(self.current_pose, pose_pred)
-            self.loc_current_pose_marker_pub.publish(self.create_position_marker(self.current_pose, color=[1,0,0,1]))
-        
     def loc_viz_cb(self, timer):
+
+
         if self.compute_network_loc is False or self.time_sent_reset is None:
             return
-        # self.pos_lock.acquire()
-        # pos_queue_list = list(self.q_pos.queue)
-        # pos_size = len(pos_queue_list)
-        # self.pos_lock.release()
 
         # create anchor pose for localization
         if time.time()-self.time_sent_reset>3.0 and self.did_reset is True:
             self.loc_counter = 0
             self.has_loc_anchor = False
+            self.large_queue_lock.acquire()
+            self.large_queue = Queue() # reset the queue as well, we can't mix unfinished elements from previous run
+            self.large_queue_lock.release()
             self.did_reset = False
             rospy.logwarn("Resetting the loc position")
+
+        self.large_queue_lock.acquire()
+        large_queue_list = copy.deepcopy(list(self.large_queue.queue))
+        self.large_queue_lock.release()
+        large_queue_len = len(large_queue_list)
         
         # set the anchor and equal to the first reference when we count 16 scans after reset
-        if self.loc_counter>=16 and self.has_loc_anchor is False:
+        if large_queue_len>=self.clip_len and self.has_loc_anchor is False:
             rospy.logwarn("Setting the loc anchor position when completed 16 scans")
             self.pose_anchor = copy.deepcopy(self.curr_pose)
             self.current_frame = copy.deepcopy(self.pose_anchor)
             self.has_loc_anchor = True
 
-        if self.loc_counter>16 and self.has_loc_anchor is True and self.compute_network_loc is True:
-            x_imgs, x_act, t = self.prepare_model_inputs()
+        if large_queue_len>=self.clip_len and self.has_loc_anchor is True and self.compute_network_loc is True:
+            x_imgs, x_act, t = self.prepare_model_inputs(queue_type='large')
+            # remove the oldest element from the large queue
+            self.large_queue_lock.acquire()
+            self.large_queue.get()
+            self.large_queue_lock.release()
+            
             start = time.time()
             # with torch.set_grad_enabled(False):
             with torch.inference_mode():
@@ -370,22 +350,7 @@ class RHCNode(rhcbase.RHCBase):
             # calculate the change in coordinates
             self.current_frame = self.transform_poses(self.current_frame, delta_pose_pred)
             self.loc_current_pose_marker_pub.publish(self.create_position_marker(self.current_frame, color=[1,0,0,1]))
-            self.compute_network_loc = False
 
-        # if pos_size==16 and self.has_loc_anchor is True:
-        #     x_imgs, x_act, t = self.prepare_model_inputs()
-        #     start = time.time()
-        #     with torch.set_grad_enabled(False):
-        #         pose_preds, loss = self.loc_model(states=x_imgs, actions=x_act, targets=x_act, gt_map=None, timesteps=t, poses=None)
-        #     finished_loc_network = time.time()
-        #     rospy.loginfo("loc network delay: "+str(finished_loc_network-start))
-        #     # publish anchor pose of the map center
-        #     self.loc_anchor_pose_marker_pub.publish(self.create_position_marker(self.pose_anchor, color=[0,0,1,1]))
-        #     # publish the current accumulated pose
-        #     pose_f = pose_preds[0,self.clip_len-1,:].cpu().numpy()
-        #     pose_semi_f = pose_preds[0,self.clip_len-2,:].cpu().numpy()
-        #     self.current_pose = self.calc_stamped_poses(self.current_pose, pose_f, pose_semi_f)
-        #     self.loc_current_pose_marker_pub.publish(self.create_position_marker(self.current_pose, color=[1,0,0,1]))
 
     def transform_poses(self, current_pose, delta_pose_pred):
         # elements of homogeneous matrix expressing point from local frame into world frame coords
@@ -543,9 +508,8 @@ class RHCNode(rhcbase.RHCBase):
         self.vel_marker_pub.publish(marker)
 
 
-
     def apply_network(self):
-        x_imgs, x_act, t = self.prepare_model_inputs()
+        x_imgs, x_act, t = self.prepare_model_inputs(queue_type='small')
         start = time.time()
         # with torch.set_grad_enabled(False):
         with torch.inference_mode():
@@ -560,52 +524,34 @@ class RHCNode(rhcbase.RHCBase):
             #     rospy.loginfo("map network delay: "+str(finished_map_network-finished_action_network))
         finished_network = time.time()
         # rospy.loginfo("network delay: "+str(finished_network-finish_processing))
-
         # de-normalize
         action_pred = pre.denorm_angle(action_pred)
         return action_pred
-        # if self.use_map:
-        #     return action_pred
-        # else:
-        #     return action_pred
 
-    def prepare_model_inputs(self):
-        start = time.time()
+
+    def prepare_model_inputs(self, queue_type):
+        # start = time.time()
         # organize the scan input
         x_imgs = torch.zeros(1,self.clip_len,720,2)
         x_act = torch.zeros(1,self.clip_len)
-        
-        self.scan_lock.acquire()
-        queue_list = list(self.q_scans.queue)
-        queue_size = self.q_scans.qsize()
-        self.scan_lock.release()
-        
-        idx = 0
-        for img in queue_list:
-            x_imgs[0,idx,:] = torch.tensor(img)
-            idx+=1
-        idx = 0
-
-        self.act_lock.acquire()
-        for act in self.q_actions.queue:
-            x_act[0,idx] = torch.tensor(act)
-            idx+=1
-        self.act_lock.release()
-
+        if queue_type=='small':
+            self.small_queue_lock.acquire()
+            queue_list = list(self.small_queue.queue)
+            self.small_queue_lock.release()
+        elif queue_type=='large':
+            self.large_queue_lock.acquire()
+            queue_list = list(self.small_queue.queue)[:self.clip_len]
+            self.large_queue_lock.release()
+        for idx, element in enumerate(queue_list):
+            x_imgs[0,idx,:] = torch.tensor(element[0])
+            x_act[0,idx] = torch.tensor(element[1])
         # x_imgs = x_imgs.contiguous().view(1, self.clip_len, 200*200)
         x_imgs = x_imgs.to(self.device)
-
         x_act = x_act.view(1, self.clip_len , 1)
         x_act = x_act.to(self.device)
-
         t = torch.arange(0, self.clip_len).view(1,-1).to(self.device)
         t = t.repeat(1,1)
-
-        # t = np.ones((1, 1, 1), dtype=int) * 7
-        # t = torch.tensor(t)
-        # t = t.to(self.device)
-
-        finish_processing = time.time()
+        # finish_processing = time.time()
         # rospy.loginfo("processing delay: "+str(finish_processing-start))
         return x_imgs, x_act, t
 
@@ -721,37 +667,32 @@ class RHCNode(rhcbase.RHCBase):
         return points_to_save
 
     def cb_scan(self, msg):
-
-        # remove element from position queue:
-        self.pos_lock.acquire()
-        if self.q_pos.full():
-            self.q_pos.get()  # remove the oldest element, will be replaced next
-        self.pos_lock.release()
-
-        # add new vehicle position
-        self.pos_lock.acquire()
-        if self.curr_pose is None:
-            self.pos_lock.release()
-            # exist the callback if there is no current pose: will only happen at the very beginning
-            return
-        else:
-            self.q_pos.put(self.curr_pose)
-        self.pos_lock.release()
-
-        # remove oldest element if the queue is already full
-        self.scan_lock.acquire()
-        if self.q_scans.full():
-            self.q_scans.get()  # remove the oldest element, will be replaced next
-        self.scan_lock.release()
+        # new lidar scan arrived
         
-        # add new processed scan
-        tmp = self.process_scan(msg)
-        self.scan_lock.acquire()
-        self.q_scans.put(tmp)
-        self.scan_lock.release()
+        # first process all the information
+        processed_scan = self.process_scan(msg)
+        current_action = copy.deepcopy(self.last_action)
+        self.pos_lock.acquire()
+        current_pose_gt = copy.deepcopy(self.curr_pose)
+        self.pos_lock.release()
+        current_pose_pred = copy.deepcopy(self.current_frame)
+        queue_element = [processed_scan, current_action, current_pose_gt, current_pose_pred]
+        
+        # update the small queue
+        self.small_queue_lock.acquire()
+        if self.small_queue.full():
+            self.small_queue.get()  # remove the oldest element, will be replaced next
+        self.small_queue.put(queue_element)
+        self.small_queue_lock.release()
+
+        # update the large queue. won't remove any elements, only increment
+        self.large_queue_lock.acquire()
+        self.large_queue.put(queue_element)
+        self.large_queue_lock.release()
 
         # control flags for other processes are activated now that queues have been updated
-        self.compute_network = True  # start running the network in the main loop from now on
+        self.new_scan_arrived = True
+        self.compute_network_action = True
         self.compute_network_loc = True
         self.loc_counter += 1
         

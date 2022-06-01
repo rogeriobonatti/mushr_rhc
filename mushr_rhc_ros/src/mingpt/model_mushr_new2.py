@@ -227,15 +227,20 @@ class GPT(nn.Module):
         )
 
         # from the tokens of s_t, s_t-1 a_t-1, predict delta in pose from t-1 to t
-        self.predict_pose_deep = nn.Sequential(
-                                 nn.Linear(3*config.n_embd, 128),
-                                 nn.ReLU(),
-                                 nn.Linear(128, 64),
-                                 nn.ReLU(),
-                                 nn.Linear(64, 32),
-                                 nn.ReLU(),
-                                 nn.Linear(32, 3)
-        )
+        if config.loc_decoder_type == 'joint':
+            self.predict_pose_deep = nn.Sequential(
+                                     nn.Linear(3*config.n_embd, 128),
+                                     nn.ReLU(),
+                                     nn.Linear(128, 64),
+                                     nn.ReLU(),
+                                     nn.Linear(64, 32),
+                                     nn.ReLU(),
+                                     nn.Linear(32, 3)
+            )
+        elif config.loc_decoder_type == 'separate':
+            self.predict_pose_deep = SeparatePosePredictor(config.n_embd)
+        else:
+            raise NotImplementedError()
 
         criterion = torch.nn.MSELoss(reduction='mean')
         self.criterion = criterion.cuda(device)
@@ -511,6 +516,36 @@ class GPT(nn.Module):
                 return pose_preds, loss, loss_translation_x, loss_translation_y, loss_angle
             elif self.config.train_mode == 'joint':
                 return action_preds, map_recon, pose_preds
+
+        
+
+class SeparatePosePredictor(nn.Module):
+    def __init__(self, n_embd):
+        super().__init__()
+        # from the tokens of s_t, s_t-1 a_t-1, predict delta in pose from t-1 to t
+        self.predict_trans = nn.Sequential(
+                                 nn.Linear(3*n_embd, 128),
+                                 nn.ReLU(),
+                                 nn.Linear(128, 64),
+                                 nn.ReLU(),
+                                 nn.Linear(64, 32),
+                                 nn.ReLU(),
+                                 nn.Linear(32, 2)
+        )
+        self.predict_rot = nn.Sequential(
+                                 nn.Linear(3*n_embd, 128),
+                                 nn.ReLU(),
+                                 nn.Linear(128, 64),
+                                 nn.ReLU(),
+                                 nn.Linear(64, 32),
+                                 nn.ReLU(),
+                                 nn.Linear(32, 1)
+        )
+
+    def forward(self, x):
+        trans = self.predict_trans(x)
+        rot = self.predict_rot(x)
+        return torch.cat((trans,rot), dim=2)
 
 class MapDecoder_4x_Deconv(nn.Module):
     def __init__(self, in_channels=384):
