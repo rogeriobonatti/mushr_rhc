@@ -50,6 +50,11 @@
             <rosparam file="$(find mushr_rhc_ros)/launch/params/all_params.yaml" />
             <rosparam file="$(find mushr_rhc_ros)/launch/sim/params.yaml" />
         </node>
+
+        <!-- to impose a limit on how many episodes we can record on this computer -->
+        <node pkg="mushr_rhc_ros" type="control_node.py" name="control_node" output="screen" required="true" >
+        </node>
+
     </group>
 
 </launch>
