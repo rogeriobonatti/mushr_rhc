@@ -2,14 +2,14 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 # file_path = '/home/azureuser/hackathon_data/e2e_eval/GPTiros_e2e_8gpu_2022-02-17_v2/info.csv'
-file_path = '/home/azureuser/hackathon_data/e2e_eval/model_test/info.csv'
+file_path = '/home/rb/hackathon_data/e2e_eval/model_test/info.csv'
 data = np.genfromtxt(file_path, delimiter=',')
 
 distances = data[:,0]
 times = data[:,1]
 
 # clear data that crashes immediately
-min_time = 3.0
+min_time = 0.1
 distances = distances[times>min_time]
 times = times[times>min_time]
 
