@@ -6,8 +6,12 @@
     <!-- logging output paths -->
     <arg name="out_path" default="/home/rb/hackathon_data_premium/e2e_eval/model_test" />
 
+    <!-- number of layers for model -->
+    <arg name="n_layers" default="12" />
+
     <!-- action model -->
-    <arg name="model_path_act" default="/home/rb/hackathon_data_premium/aml_outputs/log_output/hvd_test_16/GPTcorl_scratch_trainm_e2e_statet_pointnet_traini_1_nla_12_nhe_8_statel_0.01_2022-06-02_1654131996.2524076_2022-06-02_1654131996.2524228/model/epoch30.pth.tar" />
+    <!-- <arg name="model_path_act" default="/home/rb/hackathon_data_premium/aml_outputs/log_output/hvd_test_16/GPTcorl_scratch_trainm_e2e_statet_pointnet_traini_1_nla_12_nhe_8_statel_0.01_2022-06-02_1654131996.2524076_2022-06-02_1654131996.2524228/model/epoch30.pth.tar" /> -->
+    <arg name="model_path_act" default="/home/rb/hackathon_data_premium/aml_outputs/log_output/model_sizes_0/GPTcorl_scratch_trainm_e2e_statet_pointnet_traini_0_nla_6_nhe_8_statel_0.01_2022-06-03_1654253046.3212142_2022-06-03_1654253046.3212266/model/epoch30.pth.tar" />
 
     <!-- map model -->
     <arg name="use_map" default="false" />
@@ -35,6 +39,7 @@
             <param name="deployment_map" value="$(arg deployment_map)" />
 
             <param name="out_path" value="$(arg out_path)" />
+            <param name="n_layers" type="int" value="$(arg n_layers) " />
             <param name="model_path_act" value="$(arg model_path_act)" />
             <param name="model_path_map" value="$(arg model_path_map)" />
             <param name="model_path_loc" value="$(arg model_path_loc)" />

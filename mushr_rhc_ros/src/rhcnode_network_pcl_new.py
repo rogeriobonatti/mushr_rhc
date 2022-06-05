@@ -108,12 +108,14 @@ class RHCNode(rhcbase.RHCBase):
         saved_model_path_action = rospy.get_param("~model_path_act", 'default_value')
         self.out_path = rospy.get_param("~out_path", 'default_value')
 
+        self.n_layers = rospy.get_param("~n_layers", 12)
+
         vocab_size = 100
         block_size = self.clip_len * 2
         max_timestep = self.clip_len
 
         mconf = GPTConfig(block_size, max_timestep,
-                      n_layer=12, n_head=8, n_embd=128, model_type='GPT', use_pred_state=True,
+                      n_layer=self.n_layers, n_head=8, n_embd=128, model_type='GPT', use_pred_state=True,
                       state_tokenizer='pointnet', pretrained_encoder_path='',
                       loss='MSE', train_mode='e2e', pretrained_model_path='',
                       map_decoder='deconv', map_recon_dim=64, freeze_core=False,
@@ -160,7 +162,7 @@ class RHCNode(rhcbase.RHCBase):
             saved_map_model_path = rospy.get_param("~model_path_map", '')
 
             mconf_map = GPTConfig(block_size, max_timestep,
-                      n_layer=12, n_head=8, n_embd=128, model_type='GPT', use_pred_state=True,
+                      n_layer=self.n_layers, n_head=8, n_embd=128, model_type='GPT', use_pred_state=True,
                       state_tokenizer='pointnet', pretrained_encoder_path='',
                       loss='MSE', train_mode='map', pretrained_model_path='',
                       map_decoder='deconv', map_recon_dim=64, freeze_core=False,
@@ -191,7 +193,7 @@ class RHCNode(rhcbase.RHCBase):
             saved_loc_model_path = rospy.get_param("~model_path_loc", '')
             
             mconf_loc = GPTConfig(block_size, max_timestep,
-                      n_layer=12, n_head=8, n_embd=128, model_type='GPT', use_pred_state=True,
+                      n_layer=self.n_layers, n_head=8, n_embd=128, model_type='GPT', use_pred_state=True,
                       state_tokenizer='pointnet', pretrained_encoder_path='',
                       loss='MSE', train_mode='loc', pretrained_model_path='',
                       map_decoder='deconv', map_recon_dim=64, freeze_core=False,
