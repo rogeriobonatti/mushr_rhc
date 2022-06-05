@@ -10,7 +10,7 @@
     <arg name="model_path_act" default="/home/rb/hackathon_data_premium/aml_outputs/log_output/hvd_test_16/GPTcorl_scratch_trainm_e2e_statet_pointnet_traini_1_nla_12_nhe_8_statel_0.01_2022-06-02_1654131996.2524076_2022-06-02_1654131996.2524228/model/epoch30.pth.tar" />
 
     <!-- map model -->
-    <arg name="use_map" default="true" />
+    <arg name="use_map" default="false" />
     <arg name="model_path_map" default="/home/rb/hackathon_data_premium/aml_outputs/log_output/mapscratch_new_0/GPTcorl_map_trainm_map_sta_pointnet_traini_1_nla_12_nhe_8_2022-05-31_1653978768.732001_2022-05-31_1653978768.7320147/model/epoch28.pth.tar" />
 
     <!-- localization model -->

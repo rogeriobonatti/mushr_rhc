@@ -183,6 +183,7 @@ class RHCNode(rhcbase.RHCBase):
             map_model.eval()
             map_model.to(device)
             self.map_model = map_model
+            self.map_viz_timer = rospy.Timer(rospy.Duration(1.0 / rate_map_display), self.map_viz_cb)
 
         # localization model
         if self.use_loc:
@@ -213,6 +214,7 @@ class RHCNode(rhcbase.RHCBase):
             loc_model.eval()
             loc_model.to(device)
             self.loc_model = loc_model
+            self.map_viz_loc = rospy.Timer(rospy.Duration(1.0 / rate_loc_display), self.loc_viz_cb)
 
 
         self.small_queue = Queue(maxsize = self.clip_len) # stores current scan, action, pose. up to 16 elements
@@ -235,8 +237,7 @@ class RHCNode(rhcbase.RHCBase):
         # set timer callbacks for visualization
         rate_map_display = 1.0
         rate_loc_display = 20
-        self.map_viz_timer = rospy.Timer(rospy.Duration(1.0 / rate_map_display), self.map_viz_cb)
-        self.map_viz_loc = rospy.Timer(rospy.Duration(1.0 / rate_loc_display), self.loc_viz_cb)
+        
 
 
     def start(self):
@@ -300,7 +301,7 @@ class RHCNode(rhcbase.RHCBase):
             with torch.inference_mode():
                 self.map_recon, _ = self.map_model(states=x_imgs, actions=x_act, targets=x_act, gt_map=None, timesteps=t, poses=None, compute_loss=False)
             finished_map_network = time.time()
-            rospy.loginfo("map network delay: "+str(finished_map_network-start))
+            # rospy.loginfo("map network delay: "+str(finished_map_network-start))
             
             # publish the GT pose of the map center
             self.pose_marker_pub.publish(self.create_position_marker(pose_mid))
@@ -347,7 +348,7 @@ class RHCNode(rhcbase.RHCBase):
             with torch.inference_mode():
                 pose_preds, _, _, _, _ = self.loc_model(states=x_imgs, actions=x_act, targets=x_act, gt_map=None, timesteps=t, poses=None, compute_loss=False)
             finished_loc_network = time.time()
-            rospy.loginfo("loc network delay: "+str(finished_loc_network-start))
+            # rospy.loginfo("loc network delay: "+str(finished_loc_network-start))
             # publish anchor pose of the map center
             self.loc_anchor_pose_marker_pub.publish(self.create_position_marker(self.pose_anchor, color=[0,0,1,1]))
             # publish the current accumulated pose
@@ -522,7 +523,8 @@ class RHCNode(rhcbase.RHCBase):
             # action_pred = 0.0
             action_pred, _, _, _ = self.model(states=x_imgs, actions=x_act, targets=x_act, gt_map=None, timesteps=t, poses=None, compute_loss=False)
             finished_action_network = time.time()
-            rospy.loginfo("action network delay: "+str(finished_action_network-start))
+            # rospy.loginfo("action network delay: "+str(finished_action_network-start))
+            rospy.loginfo_throttle(10, "action network delay: "+str(finished_action_network-start))
             action_pred = action_pred[0,-1,0].cpu().flatten().item()
             # if self.use_map:
             #     map_pred, loss = self.map_model(states=x_imgs, actions=x_act, targets=x_act, gt_map=None, timesteps=t, poses=None)
