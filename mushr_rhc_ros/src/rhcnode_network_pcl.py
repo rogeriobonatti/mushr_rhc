@@ -152,7 +152,7 @@ class RHCNode(rhcbase.RHCBase):
         # mapping model
         if self.use_map:
 
-            saved_map_model_path = '/home/rb/hackathon_data_premium/aml_outputs/log_output/mapscratch_new_0/GPTcorl_map_trainm_map_sta_pointnet_traini_1_nla_12_nhe_8_2022-05-31_1653978768.732001_2022-05-31_1653978768.7320147/model/epoch8.pth.tar'
+            saved_map_model_path = '/home/rb/hackathon_data_premium/aml_outputs/log_output/mapscratch_new_0/GPTcorl_map_trainm_map_sta_pointnet_traini_1_nla_12_nhe_8_2022-05-31_1653978768.732001_2022-05-31_1653978768.7320147/model/epoch28.pth.tar'
 
             mconf_map = GPTConfig(block_size, max_timestep,
                       n_layer=12, n_head=8, n_embd=128, model_type='GPT', use_pred_state=True,
@@ -182,7 +182,7 @@ class RHCNode(rhcbase.RHCBase):
         # localization model
         if self.use_loc:
 
-            saved_loc_model_path = '/home/rb/hackathon_data_premium/aml_outputs/log_output/locscratch_new_0/GPTcorl_loc_trainm_loc_sta_pointnet_lr_6e-5_traini_1_nla_12_nhe_8_locx_0.01_locy_1_loca_10_locd_joint_2022-05-31_1653978601.5423563_2022-05-31_1653978601.5423756/model/epoch8.pth.tar'
+            saved_loc_model_path = '/home/rb/hackathon_data_premium/aml_outputs/log_output/locscratch_new_0/GPTcorl_loc_trainm_loc_sta_pointnet_lr_6e-5_traini_1_nla_12_nhe_8_locx_0.01_locy_1_loca_10_locd_joint_2022-05-31_1653978601.5423563_2022-05-31_1653978601.5423756/model/epoch26.pth.tar'
             
             mconf_loc = GPTConfig(block_size, max_timestep,
                       n_layer=12, n_head=8, n_embd=128, model_type='GPT', use_pred_state=True,
@@ -588,7 +588,7 @@ class RHCNode(rhcbase.RHCBase):
 
         self.act_lock.acquire()
         for act in self.q_actions.queue:
-            x_act[0,idx] = torch.tensor(act)
+            x_act[0,idx] = torch.tensor(pre.norm_angle(act))
             idx+=1
         self.act_lock.release()
 

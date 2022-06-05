@@ -3,38 +3,44 @@
 	<arg name="map_server" default="1" />
 	<arg name="car_name" default="car" />
 
-    <!-- <arg name="out_path" default="/home/rb/hackathon_data/e2e_eval/model_test" />
-    <arg name="model_path" default="/home/rb/hackathon_data/aml_outputs/log_output/normal-kingfish/GPTiros_e2e_8gpu_2022-02-17_1645120431.7528405_2022-02-17_1645120431.7528613/model/epoch10.pth.tar" /> -->
-
-    <!-- current model! -->
-    <!-- <arg name="out_path" default="/home/rb/hackathon_data/e2e_eval/model_test" />
-    <arg name="model_path" default="/home/rb/hackathon_data/aml_outputs/log_output/deep-adder/GPTnips_e2e_2022-04-06_1649220643.529554_2022-04-06_1649220643.5295672/model/epoch21.pth.tar" /> -->
-
-    <!-- <arg name="out_path" default="/home/rb/hackathon_data/e2e_eval/model_test" />
-    <arg name="model_path" default="/home/rb/hackathon_data/aml_outputs/log_output/renewed-colt/GPTnips_8gpu_relu_e2e_slow_bias_2022-04-02_1648869033.3693378_2022-04-02_1648869033.36935/model/epoch22.pth.tar" /> -->
-
-    <!-- <arg name="out_path" default="/home/rb/hackathon_data/e2e_eval/model_test" />
-    <arg name="model_path" default="/home/rb/hackathon_data/aml_outputs/log_output/mushr_nips/GPTnips_8gpu_relu_e2e_slow_2022-03-31_1648698385.6160257_2022-03-31_1648698385.6160388/model/epoch5.pth.tar" /> -->
-
-    <!-- current model! -->
-    <!-- <arg name="out_path" default="/home/rb/hackathon_data/e2e_eval/model_test" />
-    <arg name="model_path" default="/home/rb/hackathon_data/aml_outputs/log_output/tough-mongoose/GPTnips_e2e_2022-04-07_1649355173.7379868_2022-04-07_1649355173.7379994/model/epoch22.pth.tar" /> -->
-
-    <!-- current model! -->
+    <!-- logging output paths -->
     <arg name="out_path" default="/home/rb/hackathon_data_premium/e2e_eval/model_test" />
-    <arg name="model_path" default="/home/rb/hackathon_data_premium/aml_outputs/log_output/pretrain_new_0/GPTcorl_scratch_trainm_e2e_statet_pointnet_traini_1_nla_12_nhe_8_statel_0.01_2022-05-31_1654007043.7606997_2022-05-31_1654007043.760718/model/epoch14.pth.tar" />
-    <!-- <arg name="model_path" default="/home/rb/hackathon_data_premium/aml_outputs/log_output/pretrain_scratch_0/GPTcorl_scratch_trainm_e2e_statet_pointnet_traini_1_nla_6_nhe_8_statel_0.01_2022-05-23_1653348711.3057182_2022-05-23_1653348711.3057299/model/epoch12.pth.tar" /> -->
 
-    <group if="$(arg map_server)">
-	<include file="$(find mushr_rhc_ros)/launch/map_server.launch" />
+    <!-- action model -->
+    <arg name="model_path_act" default="/home/rb/hackathon_data_premium/aml_outputs/log_output/hvd_test_16/GPTcorl_scratch_trainm_e2e_statet_pointnet_traini_1_nla_12_nhe_8_statel_0.01_2022-06-02_1654131996.2524076_2022-06-02_1654131996.2524228/model/epoch30.pth.tar" />
+
+    <!-- map model -->
+    <arg name="use_map" default="true" />
+    <arg name="model_path_map" default="/home/rb/hackathon_data_premium/aml_outputs/log_output/mapscratch_new_0/GPTcorl_map_trainm_map_sta_pointnet_traini_1_nla_12_nhe_8_2022-05-31_1653978768.732001_2022-05-31_1653978768.7320147/model/epoch28.pth.tar" />
+
+    <!-- localization model -->
+    <arg name="use_loc" default="false" />
+    <arg name="model_path_loc" default="/home/rb/hackathon_data_premium/aml_outputs/log_output/locscratch_new_0/GPTcorl_loc_trainm_loc_sta_pointnet_lr_6e-5_traini_1_nla_12_nhe_8_locx_0.01_locy_1_loca_10_locd_joint_2022-05-31_1653978601.5423563_2022-05-31_1653978601.5423756/model/epoch30.pth.tar" />
+
+    <arg name="deployment_map" default="train" />
+    <!-- <arg name="deployment_map" default="test" /> -->
+
+    <group if="$(eval arg('deployment_map') == 'train')">
+	    <include file="$(find mushr_rhc_ros)/launch/map_server.launch" />
+    </group>
+
+    <group if="$(eval arg('deployment_map') == 'test')">
+	    <include file="$(find mushr_rhc_ros)/launch/map_server_test_env.launch" />
     </group>
 
     <group ns="$(arg car_name)">
         <node pkg="mushr_rhc_ros" type="rhcnode_network_pcl_new.py" name="rhcontroller" output="screen">
             <env name="RHC_USE_CUDA" value="0" />
 
+            <param name="deployment_map" value="$(arg deployment_map)" />
+
             <param name="out_path" value="$(arg out_path)" />
-            <param name="model_path" value="$(arg model_path)" />
+            <param name="model_path_act" value="$(arg model_path_act)" />
+            <param name="model_path_map" value="$(arg model_path_map)" />
+            <param name="model_path_loc" value="$(arg model_path_loc)" />
+
+            <param name="use_map" value="$(arg use_map)" />
+            <param name="use_loc" value="$(arg use_loc)" />
 
             <param name="inferred_pose_t" value="car_pose" />
 

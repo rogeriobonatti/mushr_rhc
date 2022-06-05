@@ -84,8 +84,7 @@ class RHCNode(rhcbase.RHCBase):
         self.default_angle = 0.0
         self.nx = None
         self.ny = None
-        self.use_map = False
-        self.use_loc = True
+        
         self.points_viz_list = None
         self.map_recon = None
         self.loc_counter = 0
@@ -101,8 +100,12 @@ class RHCNode(rhcbase.RHCBase):
         self.device = device
         self.clip_len = 16
 
-        # tests for IROS
-        saved_model_path = rospy.get_param("~model_path", 'default_value')
+        self.map_type = rospy.get_param("~deployment_map", 'train')
+
+        self.use_map = rospy.get_param("~use_map", False)
+        self.use_loc = rospy.get_param("~use_loc", False)
+
+        saved_model_path_action = rospy.get_param("~model_path_act", 'default_value')
         self.out_path = rospy.get_param("~out_path", 'default_value')
 
         vocab_size = 100
@@ -116,11 +119,11 @@ class RHCNode(rhcbase.RHCBase):
                       map_decoder='deconv', map_recon_dim=64, freeze_core=False,
                       state_loss_weight=0.1,
                       loc_x_loss_weight=0.01, loc_y_loss_weight=0.1, loc_angle_loss_weight=10.0,
-                      loc_decoder_type='separate')
+                      loc_decoder_type='joint')
         model = GPT(mconf, device)
         # model=torch.nn.DataParallel(model)
 
-        checkpoint = torch.load(saved_model_path, map_location=device)
+        checkpoint = torch.load(saved_model_path_action, map_location=device)
         # old code for loading model
         model.load_state_dict(checkpoint['state_dict'])
         # new code for loading mode
@@ -153,8 +156,8 @@ class RHCNode(rhcbase.RHCBase):
 
         # mapping model
         if self.use_map:
-
-            saved_map_model_path = '/home/rb/hackathon_data_premium/aml_outputs/log_output/mapscratch_new_0/GPTcorl_map_trainm_map_sta_pointnet_traini_1_nla_12_nhe_8_2022-05-31_1653978768.732001_2022-05-31_1653978768.7320147/model/epoch8.pth.tar'
+            
+            saved_map_model_path = rospy.get_param("~model_path_map", '')
 
             mconf_map = GPTConfig(block_size, max_timestep,
                       n_layer=12, n_head=8, n_embd=128, model_type='GPT', use_pred_state=True,
@@ -183,8 +186,8 @@ class RHCNode(rhcbase.RHCBase):
 
         # localization model
         if self.use_loc:
-
-            saved_loc_model_path = '/home/rb/hackathon_data_premium/aml_outputs/log_output/locscratch_new_0/GPTcorl_loc_trainm_loc_sta_pointnet_lr_6e-5_traini_1_nla_12_nhe_8_locx_0.01_locy_1_loca_10_locd_joint_2022-05-31_1653978601.5423563_2022-05-31_1653978601.5423756/model/epoch17.pth.tar'
+            
+            saved_loc_model_path = rospy.get_param("~model_path_loc", '')
             
             mconf_loc = GPTConfig(block_size, max_timestep,
                       n_layer=12, n_head=8, n_embd=128, model_type='GPT', use_pred_state=True,
@@ -232,7 +235,7 @@ class RHCNode(rhcbase.RHCBase):
         # set timer callbacks for visualization
         rate_map_display = 1.0
         rate_loc_display = 20
-        # self.map_viz_timer = rospy.Timer(rospy.Duration(1.0 / rate_map_display), self.map_viz_cb)
+        self.map_viz_timer = rospy.Timer(rospy.Duration(1.0 / rate_map_display), self.map_viz_cb)
         self.map_viz_loc = rospy.Timer(rospy.Duration(1.0 / rate_loc_display), self.loc_viz_cb)
 
 
@@ -249,8 +252,11 @@ class RHCNode(rhcbase.RHCBase):
         self.logger.info("Initialized")
 
         # set initial pose for the car in the very first time in an allowable region
-        self.send_initial_pose()
-        # self.send_initial_pose_12f()
+        if self.map_type == 'train':
+                self.send_initial_pose()
+        else:
+            self.send_initial_pose_12f()
+        
         self.time_started = rospy.Time.now()
 
         # wait until we actually have a car pose
@@ -544,7 +550,7 @@ class RHCNode(rhcbase.RHCBase):
             self.large_queue_lock.release()
         for idx, element in enumerate(queue_list):
             x_imgs[0,idx,:] = torch.tensor(element[0])
-            x_act[0,idx] = torch.tensor(element[1])
+            x_act[0,idx] = torch.tensor(pre.norm_angle(element[1]))
         # x_imgs = x_imgs.contiguous().view(1, self.clip_len, 200*200)
         x_imgs = x_imgs.to(self.device)
         x_act = x_act.view(1, self.clip_len , 1)
@@ -579,8 +585,10 @@ class RHCNode(rhcbase.RHCBase):
             print("Distance: {}  | Time: {} | Time so far: {}".format(self.distance_so_far, delta_time, self.time_so_far))
             with open(self.file_name,'a') as fd:
                 fd.write(str(self.distance_so_far)+','+str(self.time_so_far)+'\n')
-            self.send_initial_pose()
-            # self.send_initial_pose_12f()
+            if self.map_type == 'train':
+                self.send_initial_pose()
+            else:
+                self.send_initial_pose_12f()
             rospy.loginfo("Got stuck, resetting pose of the car to default value")
             msg = String()
             msg.data = "got stuck"
