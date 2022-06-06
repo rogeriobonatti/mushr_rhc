@@ -168,7 +168,7 @@ class RHCNode(rhcbase.RHCBase):
                       map_decoder='deconv', map_recon_dim=64, freeze_core=False,
                       state_loss_weight=0.1,
                       loc_x_loss_weight=0.01, loc_y_loss_weight=0.1, loc_angle_loss_weight=10.0,
-                      loc_decoder_type='separate')
+                      loc_decoder_type='joint')
             map_model = GPT(mconf_map, device)
             # map_model=torch.nn.DataParallel(map_model)
 
@@ -185,6 +185,7 @@ class RHCNode(rhcbase.RHCBase):
             map_model.eval()
             map_model.to(device)
             self.map_model = map_model
+            rate_map_display = 1.0
             self.map_viz_timer = rospy.Timer(rospy.Duration(1.0 / rate_map_display), self.map_viz_cb)
 
         # localization model
@@ -216,6 +217,7 @@ class RHCNode(rhcbase.RHCBase):
             loc_model.eval()
             loc_model.to(device)
             self.loc_model = loc_model
+            rate_loc_display = 20
             self.map_viz_loc = rospy.Timer(rospy.Duration(1.0 / rate_loc_display), self.loc_viz_cb)
 
 
@@ -236,9 +238,8 @@ class RHCNode(rhcbase.RHCBase):
         self.time_so_far = 0.0
         self.file_name = os.path.join(self.out_path,'info.csv')
 
-        # set timer callbacks for visualization
-        rate_map_display = 1.0
-        rate_loc_display = 20
+        
+        
         
 
 

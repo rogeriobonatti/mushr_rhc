@@ -10,18 +10,23 @@
     <arg name="n_layers" default="12" />
 
     <!-- action model -->
-    <!-- <arg name="model_path_act" default="/home/rb/hackathon_data_premium/aml_outputs/log_output/hvd_test_16/GPTcorl_scratch_trainm_e2e_statet_pointnet_traini_1_nla_12_nhe_8_statel_0.01_2022-06-02_1654131996.2524076_2022-06-02_1654131996.2524228/model/epoch30.pth.tar" /> -->
-    <arg name="model_path_act" default="/home/rb/hackathon_data_premium/aml_outputs/log_output/model_sizes_0/GPTcorl_scratch_trainm_e2e_statet_pointnet_traini_0_nla_6_nhe_8_statel_0.01_2022-06-03_1654253046.3212142_2022-06-03_1654253046.3212266/model/epoch30.pth.tar" />
+    <arg name="model_path_act" default="/home/rb/hackathon_data_premium/aml_outputs/log_output/hvd_test_16/GPTcorl_scratch_trainm_e2e_statet_pointnet_traini_1_nla_12_nhe_8_statel_0.01_2022-06-02_1654131996.2524076_2022-06-02_1654131996.2524228/model/epoch30.pth.tar" />
+    <!-- <arg name="model_path_act" default="/home/rb/hackathon_data_premium/aml_outputs/log_output/model_sizes_0/GPTcorl_scratch_trainm_e2e_statet_pointnet_traini_0_nla_6_nhe_8_statel_0.01_2022-06-03_1654253046.3212142_2022-06-03_1654253046.3212266/model/epoch30.pth.tar" /> -->
+    <!-- <arg name="model_path_act" default="/home/rb/hackathon_data_premium/aml_outputs/log_output/model_sizes_0/GPTcorl_scratch_trainm_e2e_statet_pointnet_traini_1_nla_24_nhe_8_statel_0.01_2022-06-03_1654235683.085602_2022-06-03_1654235683.0856125/model/epoch30.pth.tar" /> -->
 
     <!-- map model -->
-    <arg name="use_map" default="false" />
-    <arg name="model_path_map" default="/home/rb/hackathon_data_premium/aml_outputs/log_output/mapscratch_new_0/GPTcorl_map_trainm_map_sta_pointnet_traini_1_nla_12_nhe_8_2022-05-31_1653978768.732001_2022-05-31_1653978768.7320147/model/epoch28.pth.tar" />
+    <arg name="use_map" default="true" />
+    <!-- without fine-tuning, 100% of data -->
+    <!-- <arg name="model_path_map" default="/home/rb/hackathon_data_premium/aml_outputs/log_output/nofinetune_episodes_map_0/GPTcorl_map_trainm_map_sta_pointnet_traini_1_nla_12_nhe_8_2022-06-03_1654271262.2364998_2022-06-03_1654271262.2365131/model/epoch30.pth.tar" /> -->
+    
+    <!-- with fine-tuning, 100% of data -->
+    <arg name="model_path_map" default="/home/rb/hackathon_data_premium/aml_outputs/log_output/finetune_episodes_map_0/GPTcorl_map_trainm_map_sta_pointnet_traini_1_nla_12_nhe_8_2022-06-03_1654275654.0652122_2022-06-03_1654275654.0652246/model/epoch30.pth.tar" />
 
     <!-- localization model -->
     <arg name="use_loc" default="false" />
     <arg name="model_path_loc" default="/home/rb/hackathon_data_premium/aml_outputs/log_output/locscratch_new_0/GPTcorl_loc_trainm_loc_sta_pointnet_lr_6e-5_traini_1_nla_12_nhe_8_locx_0.01_locy_1_loca_10_locd_joint_2022-05-31_1653978601.5423563_2022-05-31_1653978601.5423756/model/epoch30.pth.tar" />
 
-    <arg name="deployment_map" default="train" />
+    <arg name="deployment_map" default="test" />
     <!-- <arg name="deployment_map" default="test" /> -->
 
     <group if="$(eval arg('deployment_map') == 'train')">
