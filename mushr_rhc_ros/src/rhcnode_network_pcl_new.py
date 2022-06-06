@@ -100,6 +100,8 @@ class RHCNode(rhcbase.RHCBase):
         self.device = device
         self.clip_len = 16
 
+        self.is_real_deployment = rospy.get_param("~is_real_deployment", False)
+
         self.map_type = rospy.get_param("~deployment_map", 'train')
 
         self.use_map = rospy.get_param("~use_map", False)
@@ -186,7 +188,7 @@ class RHCNode(rhcbase.RHCBase):
             map_model.to(device)
             self.map_model = map_model
             rate_map_display = 1.0
-            self.map_viz_timer = rospy.Timer(rospy.Duration(1.0 / rate_map_display), self.map_viz_cb)
+            
 
         # localization model
         if self.use_loc:
@@ -218,7 +220,7 @@ class RHCNode(rhcbase.RHCBase):
             loc_model.to(device)
             self.loc_model = loc_model
             rate_loc_display = 20
-            self.map_viz_loc = rospy.Timer(rospy.Duration(1.0 / rate_loc_display), self.loc_viz_cb)
+            
 
 
         self.small_queue = Queue(maxsize = self.clip_len) # stores current scan, action, pose. up to 16 elements
@@ -237,6 +239,12 @@ class RHCNode(rhcbase.RHCBase):
         self.distance_so_far = 0.0
         self.time_so_far = 0.0
         self.file_name = os.path.join(self.out_path,'info.csv')
+
+        # define timer callbacks:
+        if self.use_map:
+            self.map_viz_loc = rospy.Timer(rospy.Duration(1.0 / rate_loc_display), self.loc_viz_cb)
+        if self.use_loc:
+            self.map_viz_timer = rospy.Timer(rospy.Duration(1.0 / rate_map_display), self.map_viz_cb)
 
         
         
@@ -272,8 +280,9 @@ class RHCNode(rhcbase.RHCBase):
         while not rospy.is_shutdown() and self.run:
 
             # check if we should reset the vehicle if crashed
-            if self.check_reset(rate_hz):
-                rospy.loginfo("Resetting the car's position")
+            if not self.is_real_deployment:
+                if self.check_reset(rate_hz):
+                    rospy.loginfo("Resetting the car's position")
 
             # publish next action
             if self.compute_network_action:
@@ -295,16 +304,20 @@ class RHCNode(rhcbase.RHCBase):
         pos_queue_list = list(self.small_queue.queue)
         self.small_queue_lock.release()
         pos_size = len(pos_queue_list)
-        pose_mid = pos_queue_list[int(pos_size/2) -1][2]
-
+        
         if pos_size==16:
+            pose_mid = pos_queue_list[int(pos_size/2) -1][2]
+            # if not self.is_real_deployment:
+            #     pose_mid = pos_queue_list[int(pos_size/2) -1][2]
+            # else:
+            #     pose_mid = PoseStamped()
             x_imgs, x_act, t = self.prepare_model_inputs(queue_type='small')
             start = time.time()
             # with torch.set_grad_enabled(False):
             with torch.inference_mode():
                 self.map_recon, _ = self.map_model(states=x_imgs, actions=x_act, targets=x_act, gt_map=None, timesteps=t, poses=None, compute_loss=False)
             finished_map_network = time.time()
-            # rospy.loginfo("map network delay: "+str(finished_map_network-start))
+            rospy.loginfo("map network delay: "+str(finished_map_network-start))
             
             # publish the GT pose of the map center
             self.pose_marker_pub.publish(self.create_position_marker(pose_mid))
@@ -351,7 +364,7 @@ class RHCNode(rhcbase.RHCBase):
             with torch.inference_mode():
                 pose_preds, _, _, _, _ = self.loc_model(states=x_imgs, actions=x_act, targets=x_act, gt_map=None, timesteps=t, poses=None, compute_loss=False)
             finished_loc_network = time.time()
-            # rospy.loginfo("loc network delay: "+str(finished_loc_network-start))
+            rospy.loginfo("loc network delay: "+str(finished_loc_network-start))
             # publish anchor pose of the map center
             self.loc_anchor_pose_marker_pub.publish(self.create_position_marker(self.pose_anchor, color=[0,0,1,1]))
             # publish the current accumulated pose
@@ -526,8 +539,8 @@ class RHCNode(rhcbase.RHCBase):
             # action_pred = 0.0
             action_pred, _, _, _ = self.model(states=x_imgs, actions=x_act, targets=x_act, gt_map=None, timesteps=t, poses=None, compute_loss=False)
             finished_action_network = time.time()
-            # rospy.loginfo("action network delay: "+str(finished_action_network-start))
-            rospy.loginfo_throttle(10, "action network delay: "+str(finished_action_network-start))
+            rospy.loginfo("action network delay: "+str(finished_action_network-start))
+            # rospy.loginfo_throttle(10, "action network delay: "+str(finished_action_network-start))
             action_pred = action_pred[0,-1,0].cpu().flatten().item()
             # if self.use_map:
             #     map_pred, loss = self.map_model(states=x_imgs, actions=x_act, targets=x_act, gt_map=None, timesteps=t, poses=None)

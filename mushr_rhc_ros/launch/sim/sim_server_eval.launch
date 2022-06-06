@@ -15,7 +15,7 @@
     <!-- <arg name="model_path_act" default="/home/rb/hackathon_data_premium/aml_outputs/log_output/model_sizes_0/GPTcorl_scratch_trainm_e2e_statet_pointnet_traini_1_nla_24_nhe_8_statel_0.01_2022-06-03_1654235683.085602_2022-06-03_1654235683.0856125/model/epoch30.pth.tar" /> -->
 
     <!-- map model -->
-    <arg name="use_map" default="true" />
+    <arg name="use_map" default="false" />
     <!-- without fine-tuning, 100% of data -->
     <!-- <arg name="model_path_map" default="/home/rb/hackathon_data_premium/aml_outputs/log_output/nofinetune_episodes_map_0/GPTcorl_map_trainm_map_sta_pointnet_traini_1_nla_12_nhe_8_2022-06-03_1654271262.2364998_2022-06-03_1654271262.2365131/model/epoch30.pth.tar" /> -->
     
