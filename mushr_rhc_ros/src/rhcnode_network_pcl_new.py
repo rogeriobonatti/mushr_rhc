@@ -130,7 +130,7 @@ class RHCNode(rhcbase.RHCBase):
         model = GPT(mconf, device)
         # model=torch.nn.DataParallel(model)
 
-        if len(saved_model_path_action)>0:
+        if len(saved_model_path_action)>3: # some small number, path must have more
             checkpoint = torch.load(saved_model_path_action, map_location=device)
             # old code for loading model
             model.load_state_dict(checkpoint['state_dict'])
