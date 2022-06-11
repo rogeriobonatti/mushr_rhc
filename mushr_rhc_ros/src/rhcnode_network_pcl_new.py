@@ -133,7 +133,7 @@ class RHCNode(rhcbase.RHCBase):
         if len(saved_model_path_action)>3: # some small number, path must have more
             checkpoint = torch.load(saved_model_path_action, map_location=device)
             # old code for loading model
-            model.load_state_dict(checkpoint['state_dict'])
+            model.load_state_dict(checkpoint['state_dict'], strict=False)
             # new code for loading mode
             # new_checkpoint = OrderedDict()
             # for key in checkpoint['state_dict'].keys():
