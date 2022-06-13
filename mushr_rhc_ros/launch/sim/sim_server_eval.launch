@@ -7,10 +7,11 @@
     <arg name="out_path" default="/home/rb/hackathon_data_premium/e2e_eval/model_test" />
 
     <!-- number of layers for model -->
-    <arg name="n_layers" default="3" />
+    <arg name="n_layers" default="12" />
 
     <!-- action model -->
-    <arg name="model_path_act" type="str" default="/home/rb/hackathon_data_premium/aml_outputs/log_output/model_sizes_1/GPTcorl_scratch_trainm_e2e_statet_pointnet_traini_0.1_nla_3_nhe_8_statel_0.1_2022-06-07_1654560978.722451_2022-06-07_1654560978.7224643/model/epoch30.pth.tar" />
+    <arg name="model_path_act" type="str" default="/home/rb/hackathon_data_premium/aml_outputs/log_output/model_sizes_3/GPTcorl_scratch_trainm_e2e_statet_pointnet_traini_1_nla_12_nhe_8_statel_0.1_weightdecay_0.0001_weightdecayb_0.1_lr_6e-4_2022-06-10_1654843603.5495381_2022-06-10_1654843603.5495553/model/epoch31.pth.tar" />
+
     <!-- <arg name="model_path_act" default="/home/rb/hackathon_data_premium/aml_outputs/log_output/hvd_test_16/GPTcorl_scratch_trainm_e2e_statet_pointnet_traini_1_nla_12_nhe_8_statel_0.01_2022-06-02_1654131996.2524076_2022-06-02_1654131996.2524228/model/epoch30.pth.tar" /> -->
     <!-- <arg name="model_path_act" default="/home/rb/hackathon_data_premium/aml_outputs/log_output/model_sizes_0/GPTcorl_scratch_trainm_e2e_statet_pointnet_traini_0_nla_6_nhe_8_statel_0.01_2022-06-03_1654253046.3212142_2022-06-03_1654253046.3212266/model/epoch30.pth.tar" /> -->
     <!-- <arg name="model_path_act" default="/home/rb/hackathon_data_premium/aml_outputs/log_output/model_sizes_0/GPTcorl_scratch_trainm_e2e_statet_pointnet_traini_1_nla_24_nhe_8_statel_0.01_2022-06-03_1654235683.085602_2022-06-03_1654235683.0856125/model/epoch30.pth.tar" /> -->
