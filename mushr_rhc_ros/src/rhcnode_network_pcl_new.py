@@ -246,9 +246,9 @@ class RHCNode(rhcbase.RHCBase):
 
         # define timer callbacks:
         if self.use_map:
-            self.map_viz_loc = rospy.Timer(rospy.Duration(1.0 / rate_loc_display), self.loc_viz_cb)
-        if self.use_loc:
             self.map_viz_timer = rospy.Timer(rospy.Duration(1.0 / rate_map_display), self.map_viz_cb)
+        if self.use_loc:
+            self.map_viz_loc = rospy.Timer(rospy.Duration(1.0 / rate_loc_display), self.loc_viz_cb)
 
         
         
@@ -466,7 +466,8 @@ class RHCNode(rhcbase.RHCBase):
         rospy.loginfo("color delay: "+str(finished_colors-finished_points))
 
         # Set the pose of the marker
-        marker.pose = pose_stamped.pose
+        if pose_stamped is not None:
+            marker.pose = pose_stamped.pose
         return marker
         
     def create_position_marker(self, pose_stamped, color=[0,1,0,1]):
@@ -488,7 +489,8 @@ class RHCNode(rhcbase.RHCBase):
         marker.color.a = color[3]
 
         # Set the pose of the marker
-        marker.pose = pose_stamped.pose
+        if pose_stamped is not None:
+            marker.pose = pose_stamped.pose
         return marker
         
     

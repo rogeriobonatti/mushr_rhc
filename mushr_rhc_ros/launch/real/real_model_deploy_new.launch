@@ -1,0 +1,71 @@
+<launch>
+    <arg name="tg" default="dispersion" />
+	<arg name="map_server" default="1" />
+	<arg name="car_name" default="car" />
+
+    <!-- logging output paths -->
+    <arg name="out_path" default="/home/rb/hackathon_data_premium/e2e_eval/model_test" />
+
+    <!-- number of layers for model -->
+    <arg name="n_layers" default="12" />
+
+    <!-- action model -->
+    <arg name="model_path_act" default="/home/rb/hackathon_data_premium/aml_outputs/log_output/model_sizes_3/GPTcorl_scratch_trainm_e2e_statet_pointnet_traini_1_nla_12_nhe_8_statel_0.1_weightdecay_0.0001_weightdecayb_0.1_lr_6e-4_2022-06-10_1654843603.5495381_2022-06-10_1654843603.5495553/model/epoch30.pth.tar" />
+    <!-- <arg name="model_path_act" default="/home/rb/hackathon_data_premium/aml_outputs/log_output/model_sizes_0/GPTcorl_scratch_trainm_e2e_statet_pointnet_traini_0_nla_6_nhe_8_statel_0.01_2022-06-03_1654253046.3212142_2022-06-03_1654253046.3212266/model/epoch30.pth.tar" /> -->
+    <!-- <arg name="model_path_act" default="/home/rb/hackathon_data_premium/aml_outputs/log_output/model_sizes_0/GPTcorl_scratch_trainm_e2e_statet_pointnet_traini_1_nla_24_nhe_8_statel_0.01_2022-06-03_1654235683.085602_2022-06-03_1654235683.0856125/model/epoch30.pth.tar" /> -->
+
+    <!-- map model -->
+    <arg name="use_map" default="true" />
+    <!-- without fine-tuning, 100% of data -->
+    <arg name="model_path_map" default="/home/rb/hackathon_data_premium/aml_outputs/log_output/finetune_episodes_map_4/GPTcorl_map_trainm_map_sta_pointnet_traini_1_nla_12_nhe_8_fre_False_2022-06-11_1654906825.070987_2022-06-11_1654906825.0709982/model/epoch20.pth.tar" />
+    
+    <!-- with fine-tuning, 100% of data -->
+    <!-- <arg name="model_path_map" default="/home/rb/hackathon_data_premium/aml_outputs/log_output/finetune_episodes_map_0/GPTcorl_map_trainm_map_sta_pointnet_traini_1_nla_12_nhe_8_2022-06-03_1654275654.0652122_2022-06-03_1654275654.0652246/model/epoch30.pth.tar" /> -->
+
+    <!-- localization model -->
+    <arg name="use_loc" default="false" />
+    <arg name="model_path_loc" default="/home/rb/hackathon_data_premium/aml_outputs/log_output/locscratch_new_0/GPTcorl_loc_trainm_loc_sta_pointnet_lr_6e-5_traini_1_nla_12_nhe_8_locx_0.01_locy_1_loca_10_locd_joint_2022-05-31_1653978601.5423563_2022-05-31_1653978601.5423756/model/epoch30.pth.tar" />
+
+    <arg name="deployment_map" default="train" />
+    <!-- <arg name="deployment_map" default="test" /> -->
+
+    <group if="$(eval arg('deployment_map') == 'train')">
+	    <include file="$(find mushr_rhc_ros)/launch/map_server.launch" />
+    </group>
+
+    <group if="$(eval arg('deployment_map') == 'test')">
+	    <include file="$(find mushr_rhc_ros)/launch/map_server_test_env.launch" />
+    </group>
+
+    <group ns="$(arg car_name)">
+        <node pkg="mushr_rhc_ros" type="rhcnode_network_pcl_new.py" name="rhcontroller" output="screen">
+            <env name="RHC_USE_CUDA" value="0" />
+
+            <param name="is_real_deployment" type="bool" value="true" />
+
+            <param name="deployment_map" value="$(arg deployment_map)" />
+
+            <param name="out_path" value="$(arg out_path)" />
+            <param name="n_layers" type="int" value="$(arg n_layers) " />
+            <param name="model_path_act" value="$(arg model_path_act)" />
+            <param name="model_path_map" value="$(arg model_path_map)" />
+            <param name="model_path_loc" value="$(arg model_path_loc)" />
+
+            <param name="use_map" value="$(arg use_map)" />
+            <param name="use_loc" value="$(arg use_loc)" />
+
+            <param name="inferred_pose_t" value="particle_filter/inferred_pose" />
+            <!-- <param name="inferred_pose_t" value="car_pose" /> -->
+
+            <param name="car_name" value="$(arg car_name)" />
+
+            <rosparam file="$(find mushr_rhc_ros)/launch/params/trajgen/$(arg tg).yaml" />
+            <rosparam file="$(find mushr_rhc_ros)/launch/params/all_params.yaml" />
+            <rosparam file="$(find mushr_rhc_ros)/launch/sim/params.yaml" />
+        </node>
+
+        <!-- to impose a limit on how many episodes we can record on this computer -->
+
+    </group>
+
+</launch>
