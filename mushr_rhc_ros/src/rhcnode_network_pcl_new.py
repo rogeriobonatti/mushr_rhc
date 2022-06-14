@@ -41,6 +41,8 @@ from mingpt.model_mushr_new2 import GPT, GPTConfig
 import preprocessing_utils as pre
 from visualization_msgs.msg import Marker
 
+import cv2
+
 # import torch_tensorrt
 
 
@@ -695,6 +697,11 @@ class RHCNode(rhcbase.RHCBase):
         scan[0] = msg.header.stamp.to_sec()
         scan[1:] = msg.ranges
         original_points, sensor_origins, time_stamps, pc_range, voxel_size, lo_occupied, lo_free = pre.load_params(scan)
+
+        vis_mat, nx, ny = pre.compute_bev_image(original_points, sensor_origins, time_stamps, pc_range, voxel_size)
+        cv2.imshow('graycsale image',vis_mat)
+        cv2.waitKey(1)
+
         points_to_save = np.zeros(shape=(720,2))
         points_to_save[:original_points.shape[0],:] = original_points[:,:2]
         if original_points.shape[0]>0:

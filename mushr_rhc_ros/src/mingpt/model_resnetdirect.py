@@ -21,8 +21,7 @@ import numpy as np
 
 import sys
 sys.path.append('../')
-from models.compass.select_backbone import select_resnet
-
+# from models.compass.select_backbone import select_resnet
 
 class ResnetDirect(nn.Module):
     """  the full GPT language model, with a context size of block_size """
