@@ -127,6 +127,7 @@ class GPT(nn.Module):
 
         self.model_type = config.model_type
         self.use_pred_state = config.use_pred_state
+        self.use_pred_action = config.use_pred_action
 
         self.map_recon_dim = config.map_recon_dim
         self.freeze_core = config.freeze_core
@@ -248,22 +249,37 @@ class GPT(nn.Module):
         self.load_pretrained_model_weights(config.pretrained_model_path)
         
     def load_pretrained_model_weights(self, model_path):
-        if model_path:
+        if len(model_path)>3: # some arbitrary length for model path
             checkpoint = torch.load(model_path, map_location=self.device)
 
             # remove the 'module.' string from dict if the saved model was dataparallel
-            new_checkpoint = OrderedDict()
-            for key in checkpoint['state_dict'].keys():
-                if key.startswith('module.'):
-                    new_checkpoint[key.split("module.",1)[1]] = checkpoint['state_dict'][key]
-                else:
-                    new_checkpoint[key] = checkpoint['state_dict'][key]
+            # new_checkpoint = OrderedDict()
+            # for key in checkpoint['state_dict'].keys():
+            #     if key.startswith('module.'):
+            #         new_checkpoint[key.split("module.",1)[1]] = checkpoint['state_dict'][key]
+            #     else:
+            #         new_checkpoint[key] = checkpoint['state_dict'][key]
             
             # find the common keys
             
             # separate the components from the main transformer, tokenizer, and decoders
 
+            # remove the keys that have elements we want from scratch instead of pre-trained
+            modules_to_avoid = []
+            if 'loc' in self.config.decoders_to_reset:
+                modules_to_avoid.append('predict_pose')
+            if 'map' in self.config.decoders_to_reset:
+                modules_to_avoid.append('map_decoder')
+            new_checkpoint = OrderedDict()
+            for key in checkpoint['state_dict'].keys():
+                if not any(module in key for module in modules_to_avoid):
+                    new_checkpoint[key] = checkpoint['state_dict'][key]
+                else:
+                    # just for debugging
+                    print("LOAD: avoiding key:" + key)
+
             self.load_state_dict(new_checkpoint, strict=False)
+            # self.load_state_dict(checkpoint['state_dict'], strict=False)
             print('Successfully loaded pretrained checkpoint: {}.'.format(model_path))
 
             # for key in ckpt:
@@ -328,6 +344,7 @@ class GPT(nn.Module):
         # for p in self.parameters():
         #     if p.requires_grad:
         #         print(p)
+        print("FROZEN OPTIMIZER FINALIZED")
         return optimizer
 
     def configure_optimizers(self, train_config):
@@ -339,11 +356,13 @@ class GPT(nn.Module):
         """
 
         # separate out all parameters to those that will and won't experience regularizing weight decay
+        decay_blocks = set()
         decay = set()
         no_decay = set()
         # whitelist_weight_modules = (torch.nn.Linear, )
         whitelist_weight_modules = (torch.nn.Linear, torch.nn.Conv1d, torch.nn.Conv2d, torch.nn.Conv3d, torch.nn.ConvTranspose2d)
         blacklist_weight_modules = (torch.nn.LayerNorm, torch.nn.Embedding, torch.nn.BatchNorm3d, torch.nn.BatchNorm2d, torch.nn.BatchNorm1d)
+
         for mn, m in self.named_modules():
             for pn, p in m.named_parameters():
                 fpn = '%s.%s' % (mn, pn) if mn else pn # full param name
@@ -352,7 +371,10 @@ class GPT(nn.Module):
                     no_decay.add(fpn)
                 elif pn.endswith('weight') and isinstance(m, whitelist_weight_modules):
                     # weights of whitelist modules will be weight decayed
-                    decay.add(fpn)
+                    if 'blocks' in mn:
+                        decay_blocks.add(fpn)
+                    else:
+                        decay.add(fpn)
                 elif pn.endswith('weight') and isinstance(m, blacklist_weight_modules):
                     # weights of blacklist modules will NOT be weight decayed
                     no_decay.add(fpn)
@@ -363,8 +385,8 @@ class GPT(nn.Module):
 
         # validate that we considered every parameter
         param_dict = {pn: p for pn, p in self.named_parameters()}
-        inter_params = decay & no_decay
-        union_params = decay | no_decay
+        inter_params = (decay & no_decay) | (decay_blocks & decay) | (no_decay & decay_blocks)
+        union_params = decay | no_decay | decay_blocks
         assert len(inter_params) == 0, "parameters %s made it into both decay/no_decay sets!" % (str(inter_params), )
         assert len(param_dict.keys() - union_params) == 0, "parameters %s were not separated into either decay/no_decay set!" \
                                                     % (str(param_dict.keys() - union_params), )
@@ -372,9 +394,11 @@ class GPT(nn.Module):
         # create the pytorch optimizer object
         optim_groups = [
             {"params": [param_dict[pn] for pn in sorted(list(decay))], "weight_decay": train_config.weight_decay},
+            {"params": [param_dict[pn] for pn in sorted(list(decay_blocks))], "weight_decay": train_config.weight_decay_blocks},
             {"params": [param_dict[pn] for pn in sorted(list(no_decay))], "weight_decay": 0.0},
         ]
         optimizer = torch.optim.AdamW(optim_groups, lr=train_config.learning_rate, betas=train_config.betas)
+        print("REGULAR NON FROZEN OPTIMIZER FINALIZED")
         return optimizer
 
     # state, and action
@@ -437,9 +461,14 @@ class GPT(nn.Module):
         position_embeddings_local = torch.repeat_interleave(position_embeddings_local, 2, dim=1)
         # position_embeddings_local = position_embeddings_local.repeat(B,1,1)
 
+        # to debug tokenizer representation
+        # print(token_embeddings[0,30,:])
+
         x = self.drop(token_embeddings + position_embeddings_global + position_embeddings_local)
         x = self.blocks(x)
         x = self.ln_f(x)
+
+        # print(x[0,30,:20])
  
         if self.config.train_mode == 'e2e':
             # from the tokens of s_t, predict next action a_t (like a policy)
@@ -466,7 +495,7 @@ class GPT(nn.Module):
             pose_feat = pose_feat.reshape(B, int(N/2)-1, -1)
             pose_preds = self.predict_pose_deep(pose_feat)
             # pose_preds[:,:,2:] = torch.tanh(pose_preds[:,:,2:])
-        elif self.config.train_mode == 'joint':
+        elif self.config.train_mode == 'jointttt':
             action_preds = self.predict_action(x[:, ::2, :])
             percep_feat = x[:, ::2, :]
             B, N, D = percep_feat.shape
@@ -499,7 +528,11 @@ class GPT(nn.Module):
                         w_state = self.config.state_loss_weight
                     else:
                         w_state = 0.0
-                    loss = loss_act +  w_state*loss_states
+                    if self.config.use_pred_action:
+                        w_act = self.config.act_loss_weight
+                    else:
+                        w_act = 0.0
+                    loss = w_act*loss_act +  w_state*loss_states
                 return action_preds, loss, loss_act, loss_states
             elif self.config.train_mode == 'loc':
                 # loss over N timesteps
@@ -514,7 +547,7 @@ class GPT(nn.Module):
                            self.config.loc_y_loss_weight*loss_translation_y + \
                            self.config.loc_angle_loss_weight*loss_angle
                 return pose_preds, loss, loss_translation_x, loss_translation_y, loss_angle
-            elif self.config.train_mode == 'joint':
+            elif self.config.train_mode == 'jointtttt':
                 return action_preds, map_recon, pose_preds
 
         

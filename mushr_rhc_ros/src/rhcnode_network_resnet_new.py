@@ -84,8 +84,8 @@ class RHCNode(rhcbase.RHCBase):
         self.events = [self.goal_event, self.map_metadata_event, self.ready_event]
         self.run = True
 
-        # self.default_speed = 2.5
-        self.default_speed = 1.0
+        self.default_speed = 2.5
+        # self.default_speed = 1.0
         self.default_angle = 0.0
         self.nx = None
         self.ny = None
@@ -123,7 +123,7 @@ class RHCNode(rhcbase.RHCBase):
 
         mconf = GPTConfig(block_size, max_timestep,
           n_layer=self.n_layers, n_head=8, n_embd=128, model_type='GPT', use_pred_state=True, use_pred_action=True,
-          state_tokenizer='pointnet', pretrained_encoder_path='', 
+          state_tokenizer='resnet18', pretrained_encoder_path='', 
           loss='MSE', train_mode='e2e', pretrained_model_path='',
           map_decoder='deconv', map_recon_dim=64, freeze_core=False,
           state_loss_weight=0.1, act_loss_weight=1.0, 
@@ -573,7 +573,9 @@ class RHCNode(rhcbase.RHCBase):
     def prepare_model_inputs(self, queue_type):
         # start = time.time()
         # organize the scan input
-        x_imgs = torch.zeros(1,self.clip_len,720,2)
+
+        x_imgs = torch.zeros(1,self.clip_len,self.nx,self.ny)
+
         x_act = torch.zeros(1,self.clip_len)
         if queue_type=='small':
             self.small_queue_lock.acquire()
@@ -586,7 +588,7 @@ class RHCNode(rhcbase.RHCBase):
         for idx, element in enumerate(queue_list):
             x_imgs[0,idx,:] = torch.tensor(element[0])
             x_act[0,idx] = torch.tensor(pre.norm_angle(element[1]))
-        # x_imgs = x_imgs.contiguous().view(1, self.clip_len, 200*200)
+        x_imgs = x_imgs.contiguous().view(1, self.clip_len, 200*200)
         x_imgs = x_imgs.to(self.device)
         x_act = x_act.view(1, self.clip_len , 1)
         x_act = x_act.to(self.device)
@@ -702,18 +704,15 @@ class RHCNode(rhcbase.RHCBase):
         scan[0] = msg.header.stamp.to_sec()
         scan[1:] = msg.ranges
         original_points, sensor_origins, time_stamps, pc_range, voxel_size, lo_occupied, lo_free = pre.load_params(scan, self.is_real_deployment)
-
-        # vis_mat, nx, ny = pre.compute_bev_image(original_points, sensor_origins, time_stamps, pc_range, voxel_size)
+        vis_mat, nx, ny = pre.compute_bev_image(original_points, sensor_origins, time_stamps, pc_range, voxel_size)
         # cv2.imshow('graycsale image',vis_mat)
         # cv2.waitKey(1)
 
-        points_to_save = np.zeros(shape=(720,2))
-        points_to_save[:original_points.shape[0],:] = original_points[:,:2]
-        if original_points.shape[0]>0:
-            random_indices = np.random.choice(original_points.shape[0], 720-original_points.shape[0], replace=True)
-            # print(random_indices)
-            points_to_save[original_points.shape[0]:,:] = original_points[random_indices,:2]
-        return points_to_save
+        if self.nx is None:
+            self.nx = nx
+            self.ny = ny
+
+        return vis_mat
 
     def cb_scan(self, msg):
         # new lidar scan arrived

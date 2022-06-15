@@ -10,8 +10,18 @@
     <arg name="n_layers" default="12" />
 
     <!-- action model -->
+
+    <!-- for img -->
+    <arg name="model_path_act" type="str" default="/home/rb/hackathon_data_premium/aml_outputs/log_output/nonoise_resnet_0/GPTcorl_12m_pre_trainm_e2e_statet_resnet18_traini_0.2_nla_12_nhe_8_statel_0.1_weightdecay_0.0001_weightdecayb_0.1_lr_6e-4_2022-06-14_1655235143.077357_2022-06-14_1655235143.0773675/model/epoch17.pth.tar" />
+
+    <!-- for pt drop -->
+    <!-- <arg name="model_path_act" type="str" default="/home/rb/hackathon_data_premium/aml_outputs/log_output/nonoise_ptdrop_1/GPTcorl_12m_pre_trainm_e2e_statet_pointnet_traini_0.5_nla_12_nhe_8_statel_0.1_weightdecay_0.0001_weightdecayb_0.1_lr_6e-4_2022-06-14_1655247552.6891448_2022-06-14_1655247552.6891577/model/epoch10.pth.tar" /> -->
+
+    <!-- <arg name="model_path_act" default="/home/rb/hackathon_data_premium/aml_outputs/log_output/partialnoise8m/GPTcorl_8m_pre_trainm_e2e_statet_pointnet_traini_1_nla_12_nhe_8_statel_0.1_weightdecay_0.0001_weightdecayb_0.1_lr_6e-4_2022-06-14_1655185151.5858376_2022-06-14_1655185151.5858524/model/epoch30.pth.tar" /> -->
+    <!-- <arg name="model_path_act" default="/home/rb/hackathon_data_premium/aml_outputs/log_output/fullnoise8m/GPTcorl_8m_pre_trainm_e2e_statet_pointnet_traini_1_nla_12_nhe_8_statel_0.1_weightdecay_0.0001_weightdecayb_0.1_lr_6e-4_2022-06-14_1655184530.3072667_2022-06-14_1655184530.307283/model/epoch30.pth.tar" /> -->
+
     <!-- <arg name="model_path_act" default="/home/rb/hackathon_data_premium/aml_outputs/log_output/6m_scratch/GPTcorl_6m_pre_trainm_e2e_statet_pointnet_traini_1_nla_12_nhe_8_statel_0.1_weightdecay_0.0001_weightdecayb_0.1_lr_6e-4_2022-06-13_1655139613.6754146_2022-06-13_1655139613.6754277/model/epoch10.pth.tar" /> -->
-    <arg name="model_path_act" default="/home/rb/hackathon_data_premium/aml_outputs/log_output/model_sizes_3/GPTcorl_scratch_trainm_e2e_statet_pointnet_traini_1_nla_12_nhe_8_statel_0.1_weightdecay_0.0001_weightdecayb_0.1_lr_6e-4_2022-06-10_1654843603.5495381_2022-06-10_1654843603.5495553/model/epoch30.pth.tar" />
+    <!-- <arg name="model_path_act" default="/home/rb/hackathon_data_premium/aml_outputs/log_output/model_sizes_3/GPTcorl_scratch_trainm_e2e_statet_pointnet_traini_1_nla_12_nhe_8_statel_0.1_weightdecay_0.0001_weightdecayb_0.1_lr_6e-4_2022-06-10_1654843603.5495381_2022-06-10_1654843603.5495553/model/epoch30.pth.tar" /> -->
     <!-- <arg name="model_path_act" default="/home/rb/hackathon_data_premium/aml_outputs/log_output/model_sizes_0/GPTcorl_scratch_trainm_e2e_statet_pointnet_traini_0_nla_6_nhe_8_statel_0.01_2022-06-03_1654253046.3212142_2022-06-03_1654253046.3212266/model/epoch30.pth.tar" /> -->
     <!-- <arg name="model_path_act" default="/home/rb/hackathon_data_premium/aml_outputs/log_output/model_sizes_0/GPTcorl_scratch_trainm_e2e_statet_pointnet_traini_1_nla_24_nhe_8_statel_0.01_2022-06-03_1654235683.085602_2022-06-03_1654235683.0856125/model/epoch30.pth.tar" /> -->
 
@@ -39,7 +49,8 @@
     </group>
 
     <group ns="$(arg car_name)">
-        <node pkg="mushr_rhc_ros" type="rhcnode_network_pcl_new.py" name="rhcontroller" output="screen">
+        <!-- <node pkg="mushr_rhc_ros" type="rhcnode_network_pcl_new.py" name="rhcontroller" output="screen"> -->
+        <node pkg="mushr_rhc_ros" type="rhcnode_network_resnet_new.py" name="rhcontroller" output="screen">
             <env name="RHC_USE_CUDA" value="0" />
 
             <param name="is_real_deployment" type="bool" value="true" />

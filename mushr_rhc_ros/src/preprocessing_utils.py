@@ -10,11 +10,21 @@ def denorm_angle(angle):
     # denormalize all actions
     act_max = 0.38
     act_min = -0.38
-    return (angle*(act_max-act_min)+act_max+act_min)/2
+    denorm_angle = (angle*(act_max-act_min)+act_max+act_min)/2.0
+    # denorm_angle = max(min(0.1,denorm_angle),-0.1)
+    return denorm_angle
 
-def load_params(data_col):
+def load_params(data_col, is_real_deployment=True):
+
+    if not is_real_deployment:
+        # print("num of nans before: {}".format(np.isnan(data_col[1:]).sum()))
+        # insert artificial drop in lasers
+        random_indices_to_replace = np.random.choice(np.arange(1,data_col.shape[0]), int(data_col[1:].shape[0]*0.2), replace=False)
+        data_col[random_indices_to_replace] = np.nan
+        # print("num of nans after: {}".format(np.isnan(data_col[1:]).sum()))
+
     condition = (data_col[1:]<12.0) & (data_col[1:]>0.5) & (~np.isnan(data_col[1:])) # params for the dataset collection
-    # condition = (data_col[1:]<4.0) & (data_col[1:]>0.1) & (~np.isnan(data_col[1:]))
+    # condition = (data_col[1:]<8.0) & (data_col[1:]>0.02) & (~np.isnan(data_col[1:]))
     ok_R = np.extract(condition, data_col[1:])
     num_points = ok_R.shape[0]
     # angles = np.linspace(0, 2*np.pi, 720)*-1.0 + np.pi # aligned in car coordinate frame (because ydlidar points backwards)
