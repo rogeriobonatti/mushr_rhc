@@ -19,7 +19,7 @@ def load_params(data_col, is_real_deployment=True):
     if not is_real_deployment:
         # print("num of nans before: {}".format(np.isnan(data_col[1:]).sum()))
         # insert artificial drop in lasers
-        random_indices_to_replace = np.random.choice(np.arange(1,data_col.shape[0]), int(data_col[1:].shape[0]*0.2), replace=False)
+        random_indices_to_replace = np.random.choice(np.arange(1,data_col.shape[0]), int(data_col[1:].shape[0]*0.0), replace=False)
         data_col[random_indices_to_replace] = np.nan
         # print("num of nans after: {}".format(np.isnan(data_col[1:]).sum()))
 
