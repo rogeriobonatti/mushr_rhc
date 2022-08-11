@@ -138,7 +138,8 @@ def process_folder(folder, processed_dataset_path):
 
 
 # define script parameters
-base_folder = '/home/azureuser/hackathon_data/hackathon_data_2p5_nonoise3'
+# base_folder = '/home/azureuser/hackathon_data_premium/hackathon_data_2p5_withfullnoise0'
+base_folder = '/home/azureuser/hackathon_data_premium/hackathon_data_2p5_withpartialnoise0'
 output_folder_name = 'processed_withpose2'
 folders_list = sorted(glob.glob(os.path.join(base_folder, '*')))
 total_n_folders = len(folders_list)
