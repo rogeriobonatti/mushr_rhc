@@ -71,6 +71,7 @@ class RHCNode(rhcbase.RHCBase):
         self.hp_world = None
         self.time_started_goal = None
         self.num_trials = 0
+        self.global_counter = 0
 
         self.act_inference_time_sum = 0.0
         self.act_inference_time_count = 0
@@ -84,8 +85,8 @@ class RHCNode(rhcbase.RHCBase):
         self.events = [self.goal_event, self.map_metadata_event, self.ready_event]
         self.run = True
 
-        # self.default_speed = 2.5
-        self.default_speed = 1.0
+        self.default_speed = 2.5
+        # self.default_speed = 0.0
         self.default_angle = 0.0
         self.nx = None
         self.ny = None
@@ -545,6 +546,17 @@ class RHCNode(rhcbase.RHCBase):
 
 
     def apply_network(self):
+
+        # return the default action if the queue doesn't have enough length
+        # find the middle pose for plotting reference
+        self.small_queue_lock.acquire()
+        pos_queue_list = list(self.small_queue.queue)
+        self.small_queue_lock.release()
+        pos_size = len(pos_queue_list)
+        if pos_size<16:
+            print("returning early!!!!!")
+            return self.default_angle
+
         start_zero = time.time()
         x_imgs, x_act, t = self.prepare_model_inputs(queue_type='small')
         start = time.time()
@@ -636,6 +648,10 @@ class RHCNode(rhcbase.RHCBase):
             self.distance_so_far = 0.0
             self.time_so_far = 0.0
             self.last_reset_time = time.time()
+            # need to empty the small queue as well, and zero the last action so we don't bias the next episode
+            self.last_action = self.default_angle
+            self.small_queue = Queue(maxsize = self.clip_len) # stores current scan, action, pose. up to 16 elements
+            self.global_counter = 0
             return True
         else:
             return False
@@ -651,10 +667,19 @@ class RHCNode(rhcbase.RHCBase):
         # msg.pose.pose.position.y = hp_world_valid[new_pos_idx][1]
         # msg.pose.pose.position.z = 0.0
         # quat = utilss.angle_to_rosquaternion(hp_world_valid[new_pos_idx][1])
-        msg.pose.pose.position.x = 4.12211 + (np.random.rand()-0.5)*2.0*0.5
-        msg.pose.pose.position.y = -7.49623 + (np.random.rand()-0.5)*2.0*0.5
+
+        # usual eval place
+        # msg.pose.pose.position.x = 4.12211 + (np.random.rand()-0.5)*2.0*0.5
+        # msg.pose.pose.position.y = -7.49623 + (np.random.rand()-0.5)*2.0*0.5
+        # msg.pose.pose.position.z = 0.0
+        # quat = utilss.angle_to_rosquaternion(np.radians(68 + (np.random.rand()-0.5)*2.0*360)) # 360 instead of zero at the end
+
+        # prompting place
+        msg.pose.pose.position.x = 6.53540635068 + (np.random.rand()-0.5)*2.0*0.1
+        msg.pose.pose.position.y = -1.8433986464 + (np.random.rand()-0.5)*2.0*0.1
         msg.pose.pose.position.z = 0.0
-        quat = utilss.angle_to_rosquaternion(np.radians(68 + (np.random.rand()-0.5)*2.0*360)) # 360 instead of zero at the end
+        quat = utilss.angle_to_rosquaternion(np.radians(68 + (np.random.rand()-0.5)*2.0*0)) # 360 instead of zero at the end
+
         msg.pose.pose.orientation = quat
 
         self.did_reset = True
@@ -720,11 +745,16 @@ class RHCNode(rhcbase.RHCBase):
         
         # first process all the information
         processed_scan = self.process_scan(msg)
-        current_action = copy.deepcopy(self.last_action)
+        if self.global_counter >16:
+            current_action = copy.deepcopy(self.last_action)
+        else:
+            current_action = -0.3
+            self.global_counter += 1
         self.pos_lock.acquire()
         current_pose_gt = copy.deepcopy(self.curr_pose)
         self.pos_lock.release()
         current_pose_pred = copy.deepcopy(self.current_frame)
+
         queue_element = [processed_scan, current_action, current_pose_gt, current_pose_pred]
         
         # update the small queue

@@ -2,14 +2,14 @@
 <launch>
     <arg name="car_name" default="car" />
     
-    <arg name="record_path" default="/project/recordings"/>
+    <arg name="record_path" default="/home/rb/data"/>
     <arg name="trial_name" default=""/>
 
     <rosparam command="dump" file="$(arg record_path)/params.yaml" />
 
     <group ns="$(arg car_name)">
         <node pkg="rosbag" type="record" name="debug_recorder"
-            args="record -O $(arg record_path)/data.bag
+            args="record -O $(arg record_path)/data_bias.bag
             car_pose
             experiments/finished
             experiments/language_bias
